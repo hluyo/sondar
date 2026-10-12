@@ -14,8 +14,10 @@ Install it, open it, pick a port and read. Send commands to your board and watch
 - **ASCII and HEX views**, optional timestamps, echo of sent commands, ANSI colors from the device.
 - **Send line** with history (↑/↓), line ending selector (none, CR, LF, CR+LF) and escapes for raw bytes: `\r`, `\n`, `\t`, `\0`, `\\`, `\xHH`.
 - **Quick commands** with a name, editable in place, triggered with a click or F1–F12.
-- **Live plot** of numeric lines: channels are detected automatically, with min/max/mean per channel and a 5–60 s time window. Pick which channels to show, and choose how the Y axis behaves: **Auto** (fits the visible data), **Expand** (grows to fit new peaks and never shrinks) or **Manual** (fixed min and max).
+- **Live plot** of numeric lines: channels are detected automatically, with min/max/mean per channel and a 5–60 s time window. Pick which channels to show, and choose how the Y axis behaves: **Auto** (fits the visible data), **Expand** (grows to fit new peaks and never shrinks) or **Manual** (fixed min and max). Drag across the plot to zoom into a time span; double-click to go back to live data. Export the samples to CSV (`Documents/Sonda Serial/exports`).
 - **Auto-reconnect** when the board is unplugged or reset.
+- **Control lines.** DTR and RTS switches (reset a board or put it in bootloader mode without touching it) and live CTS, DSR, CD and RI indicators.
+- **Session log** to a text file, one timestamped line per event (`RX`, `TX`, info), saved in `Documents/Sonda Serial/logs`.
 - **Light and dark themes**, following the system setting by default.
 
 ### Plot format

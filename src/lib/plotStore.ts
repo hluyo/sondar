@@ -1,4 +1,5 @@
 import { parseLine } from "./lineParser";
+import { clockTime } from "./stream";
 
 const MAX_POINTS = 60_000;
 
@@ -66,6 +67,18 @@ export class PlotStore {
       this.x.splice(0, drop);
       for (const y of this.ys) y.splice(0, drop);
     }
+  }
+
+  /** Every stored sample as CSV: seconds since the first sample, clock time, one column per channel. */
+  toCSV() {
+    const t0 = this.x[0] ?? 0;
+    const rows = [["time_s", "clock", ...this.names].join(",")];
+    for (let i = 0; i < this.x.length; i++) {
+      const cells = [(this.x[i] - t0).toFixed(3), clockTime(this.x[i] * 1000)];
+      for (const y of this.ys) cells.push(y[i] === null ? "" : String(y[i]));
+      rows.push(cells.join(","));
+    }
+    return rows.join("\r\n") + "\r\n";
   }
 
   clear() {

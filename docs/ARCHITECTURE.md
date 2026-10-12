@@ -19,6 +19,8 @@ Sonda Serial is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns th
   - `open_port` opens the port and starts a reader thread. The thread reads with a short timeout and sends the bytes to the frontend through a Tauri `Channel`, batching them every ~16 ms (or 16 KB) so fast devices do not flood the UI.
   - When the port fails (cable pulled, board reset), the thread sends `Closed { reason }`. A user-initiated close sends `Closed { reason: None }`.
   - Writes go through a cloned handle held in `SerialState`.
+- `serial.rs` also asserts DTR and RTS on open (RTS is left to the driver with hardware flow control) and, from the reader thread, checks the input lines (CTS, DSR, CD, RI) every 100 ms, sending `Signals` only when they change.
+- `files.rs`: session log (`log_start` / `log_write` / `log_stop`), plot exports (`save_export`) and `open_folder`. Files go under `Documents/Sonda Serial/{logs,exports}`.
 - `lib.rs`: registers the commands and the shared state.
 
 ## Frontend (`src`)
@@ -29,6 +31,8 @@ Sonda Serial is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns th
 - `lib/plotStore.ts`: column store for the plot (shared time axis + one array per channel), capped in size, plus per-window statistics.
 - `lib/encoding.ts`: line endings and escape handling (`\r`, `\n`, `\xHH`…) for sent commands.
 - `lib/serial.ts`: typed wrappers around the Tauri commands.
+- `lib/sessionLog.ts`: subscribes to the stream, splits received bytes into timestamped lines (ANSI codes removed) and sends them to the backend in batches.
+- `lib/files.ts`: typed wrappers for the file commands.
 - `lib/settings.ts`: settings persisted in `localStorage`.
 - `lib/theme.ts`: resolves the light/dark preference (or the OS setting) and sets `data-theme` on the root element. Colors are CSS tokens in `index.css`; light mode redefines the same tokens. The terminal and the plot get the theme explicitly, since xterm.js and uPlot take colors from JavaScript.
 - `components/`: `ConnectionBar` (title bar, port settings as grouped radio buttons, folded summary when connected), `FrameDiagram` (UART frame for the current settings), `QuickCommands`, `TerminalPanel` (toolbar, terminal, send bar), `PlotPanel`.
