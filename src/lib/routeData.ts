@@ -1,4 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
+import { t } from "./i18n";
 import { checksum } from "./nmea";
 
 /**
@@ -73,12 +74,12 @@ export async function routeFromZip(file: File): Promise<RouteData> {
 
 function buildRoute(files: FileMap, name: string): RouteData {
   const csv = files.get("ruta_referencia.csv");
-  if (!csv) throw new Error("ruta_referencia.csv not found");
+  if (!csv) throw new Error(t("ruta_referencia.csv not found"));
   const rows = parseCsv(csv);
   const header = rows.shift() ?? [];
   const col = (n: string) => {
     const i = header.indexOf(n);
-    if (i < 0) throw new Error(`ruta_referencia.csv: column "${n}" missing`);
+    if (i < 0) throw new Error(t("ruta_referencia.csv: column \"{n}\" missing", { n }));
     return i;
   };
   const c = {
@@ -118,12 +119,12 @@ function buildRoute(files: FileMap, name: string): RouteData {
     });
   }
   if (missing.length) {
-    const list = missing.slice(0, 5).join(", ") + (missing.length > 5 ? `… (${missing.length} in total)` : "");
-    throw new Error(`Missing burst files: ${list}`);
+    const list = missing.slice(0, 5).join(", ") + (missing.length > 5 ? `… (${t("{n} in total", { n: missing.length })})` : "");
+    throw new Error(t("Missing frame files: {list}", { list }));
   }
-  if (steps.length === 0) throw new Error("ruta_referencia.csv has no rows");
+  if (steps.length === 0) throw new Error(t("ruta_referencia.csv has no rows"));
   const stepFiles = [...files.keys()].filter((k) => k.startsWith("nmea_")).length;
-  if (stepFiles !== steps.length) throw new Error(`${stepFiles} burst files but ${steps.length} rows in ruta_referencia.csv`);
+  if (stepFiles !== steps.length) throw new Error(t("{files} frame files but {rows} rows in ruta_referencia.csv", { files: stepFiles, rows: steps.length }));
 
   const [startLabel, endLabel] = routeLabels(files.get("readme"));
   return { name, startLabel, endLabel, date: rmcDate(steps), steps };
