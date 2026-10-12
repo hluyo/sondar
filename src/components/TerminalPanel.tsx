@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { LINE_ENDINGS, type LineEnding } from "../lib/encoding";
 import type { Settings } from "../lib/settings";
-import type { Emitter, StreamEvent } from "../lib/stream";
+import { type Emitter, formatBytes, type StreamEvent } from "../lib/stream";
 import type { Theme } from "../lib/theme";
 import { TerminalRenderer } from "../lib/terminalRenderer";
-import { ArrowDownIcon, ClockIcon, EchoIcon, PauseIcon, PlayIcon, SendIcon, TrashIcon } from "./icons";
+import { ArrowDownIcon, ClockIcon, EchoIcon, FolderIcon, PauseIcon, PlayIcon, SendIcon, TrashIcon } from "./icons";
 import { IconButton, Segmented, ToggleButton } from "./ui";
 
 interface Props {
@@ -14,9 +14,12 @@ interface Props {
   update: (patch: Partial<Settings>) => void;
   onSend: (text: string) => void;
   onClear: () => void;
+  log: { path: string; bytes: number } | null;
+  onToggleLog: () => void;
+  onOpenLogFolder: () => void;
 }
 
-export function TerminalPanel({ bus, theme, settings, update, onSend, onClear }: Props) {
+export function TerminalPanel({ bus, theme, settings, update, onSend, onClear, log, onToggleLog, onOpenLogFolder }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<TerminalRenderer | null>(null);
   const [paused, setPaused] = useState(false);
@@ -104,6 +107,13 @@ export function TerminalPanel({ bus, theme, settings, update, onSend, onClear }:
           <EchoIcon size={14} />
           Echo
         </ToggleButton>
+        <ToggleButton pressed={!!log} title={log ? `Stop logging · ${log.path}` : "Save everything to a text file"} onClick={onToggleLog}>
+          <span className={`size-2.5 rounded-full ${log ? "animate-pulse bg-err" : "border-[1.5px] border-current"}`} />
+          {log ? `Log · ${formatBytes(log.bytes)}` : "Log"}
+        </ToggleButton>
+        <IconButton label="Open logs folder" onClick={onOpenLogFolder} className="size-8">
+          <FolderIcon size={14} />
+        </IconButton>
         <div className="min-w-0 flex-1" />
         <button
           type="button"

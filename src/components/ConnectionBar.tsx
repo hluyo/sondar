@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { frameLabel, type PortInfo } from "../lib/serial";
+import { frameLabel, type InputLines, type OutputLines, type PortInfo } from "../lib/serial";
 import type { Settings } from "../lib/settings";
 import { formatDuration } from "../lib/stream";
 import type { Theme } from "../lib/theme";
@@ -43,6 +43,10 @@ interface Props {
   onToggleConnection: () => void;
   theme: Theme;
   onToggleTheme: () => void;
+  outputs: OutputLines;
+  /** Null while no port is open. */
+  inputs: InputLines | null;
+  onSetOutput: (line: keyof OutputLines, value: boolean) => void;
 }
 
 /**
@@ -107,15 +111,8 @@ function TitleBar({ settings, update, status, connectedAt, theme, onToggleTheme 
   );
 }
 
-function SettingsPanel({
-  settings,
-  update,
-  ports,
-  onRefreshPorts,
-  status,
-  onToggleConnection,
-  onCollapse,
-}: Props & { onCollapse: () => void }) {
+function SettingsPanel(props: Props & { onCollapse: () => void }) {
+  const { settings, update, ports, onRefreshPorts, status, onToggleConnection, onCollapse } = props;
   const locked = status === "connected" || status === "connecting";
 
   return (
@@ -194,6 +191,10 @@ function SettingsPanel({
         ))}
       </Group>
 
+      <Group legend="Control lines" disabled={status !== "connected"}>
+        <ControlLines {...props} vertical />
+      </Group>
+
       <Group legend="Frame · 'A' (0x41)" className="flex-[1_1_300px]">
         <FrameDiagram baudRate={settings.baudRate} dataBits={settings.dataBits} parity={settings.parity} stopBits={settings.stopBits} />
       </Group>
@@ -205,7 +206,8 @@ function SettingsPanel({
   );
 }
 
-function Summary({ settings, status, onToggleConnection, onExpand }: Props & { onExpand: () => void }) {
+function Summary(props: Props & { onExpand: () => void }) {
+  const { settings, status, onToggleConnection, onExpand } = props;
   const chip = "inline-flex h-7 items-center rounded-md border border-line-strong bg-raised px-2.5 font-mono text-xs text-fg-2";
   return (
     <section aria-label="Connection summary" className="flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-line bg-panel px-4 py-2">
@@ -217,11 +219,62 @@ function Summary({ settings, status, onToggleConnection, onExpand }: Props & { o
       <span className={chip}>{frameLabel(settings)}</span>
       <span className={chip}>{FLOW.find((f) => f.value === settings.flowControl)?.short}</span>
       <div className="min-w-0 flex-1" />
+      {status === "connected" && <ControlLines {...props} />}
       <button type="button" onClick={onExpand} className="flex h-8 items-center gap-2 rounded-lg px-2.5 text-fg-2 hover:bg-raised">
         Settings
         <ChevronDownIcon size={14} />
       </button>
     </section>
+  );
+}
+
+const INPUT_LINES: { key: keyof InputLines; label: string; title: string }[] = [
+  { key: "cts", label: "CTS", title: "Clear To Send" },
+  { key: "dsr", label: "DSR", title: "Data Set Ready" },
+  { key: "cd", label: "CD", title: "Carrier Detect" },
+  { key: "ri", label: "RI", title: "Ring Indicator" },
+];
+
+/** DTR/RTS switches (computer → device) and CTS/DSR/CD/RI lights (device → computer). */
+function ControlLines({ settings, outputs, inputs, onSetOutput, vertical }: Props & { vertical?: boolean }) {
+  const rtsOwnedByFlow = settings.flowControl === "hardware";
+  const outputButton = (line: keyof OutputLines, title: string, disabled = false) => {
+    const on = outputs[line];
+    return (
+      <button
+        type="button"
+        aria-pressed={on}
+        disabled={disabled}
+        title={disabled ? "Controlled by RTS/CTS flow control" : `${title}: click to turn ${on ? "off" : "on"}`}
+        onClick={() => onSetOutput(line, !on)}
+        className={`flex h-7 items-center gap-1.5 rounded-md border px-2 font-mono text-xs font-medium disabled:opacity-40 ${
+          on ? "border-transparent bg-accent-soft text-accent" : "border-line-strong text-muted hover:text-fg-2"
+        }`}
+      >
+        <span className={`size-1.5 rounded-full ${on ? "bg-accent" : "bg-line-input"}`} />
+        {line.toUpperCase()}
+      </button>
+    );
+  };
+
+  return (
+    <div className={`flex gap-2 ${vertical ? "flex-col py-1" : "items-center"}`}>
+      <div className="flex gap-1.5">
+        {outputButton("dtr", "Data Terminal Ready")}
+        {outputButton("rts", "Request To Send", rtsOwnedByFlow)}
+      </div>
+      <div className={`grid gap-x-2.5 gap-y-1 ${vertical ? "grid-cols-2" : "grid-flow-col"}`}>
+        {INPUT_LINES.map((l) => {
+          const on = inputs?.[l.key] ?? false;
+          return (
+            <span key={l.key} title={`${l.title}: ${on ? "on" : "off"}`} className="flex items-center gap-1.5 font-mono text-[11px] text-muted">
+              <span className={`size-2 rounded-full ${on ? "bg-ok shadow-[0_0_0_3px_var(--color-ok-ring)]" : "bg-line-input"}`} />
+              {l.label}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

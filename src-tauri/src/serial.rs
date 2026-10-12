@@ -18,6 +18,8 @@ use tauri::ipc::Channel;
 const READ_TIMEOUT: Duration = Duration::from_millis(10);
 const FLUSH_INTERVAL: Duration = Duration::from_millis(16);
 const MAX_BATCH: usize = 16 * 1024;
+/// How often the input lines (CTS, DSR, CD, RI) are checked.
+const SIGNAL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,8 +44,19 @@ pub struct PortConfig {
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SerialEvent {
-    Data { bytes: Vec<u8> },
-    Closed { reason: Option<String> },
+    Data {
+        bytes: Vec<u8>,
+    },
+    /// Input control lines, sent when any of them changes.
+    Signals {
+        cts: bool,
+        dsr: bool,
+        cd: bool,
+        ri: bool,
+    },
+    Closed {
+        reason: Option<String>,
+    },
 }
 
 struct Connection {
@@ -106,7 +119,7 @@ pub fn open_port(
         previous.shutdown();
     }
 
-    let port = serialport::new(&config.port, config.baud_rate)
+    let mut port = serialport::new(&config.port, config.baud_rate)
         .data_bits(match config.data_bits {
             5 => DataBits::Five,
             6 => DataBits::Six,
@@ -132,6 +145,14 @@ pub fn open_port(
         .open()
         .map_err(|e| format!("{}: {}", config.port, e))?;
 
+    // Assert DTR and RTS on open, like most terminals do. Many boards expect it:
+    // on ESP32 dev boards, for example, both asserted means "run".
+    // With hardware flow control the driver owns RTS, so it is left alone.
+    let _ = port.write_data_terminal_ready(true);
+    if config.flow_control != "hardware" {
+        let _ = port.write_request_to_send(true);
+    }
+
     let reader_port = port.try_clone().map_err(|e| e.to_string())?;
     let stop = Arc::new(AtomicBool::new(false));
     let reader = {
@@ -154,6 +175,8 @@ fn read_loop(mut port: Box<dyn SerialPort>, stop: Arc<AtomicBool>, channel: Chan
     let mut buf = [0u8; 4096];
     let mut batch: Vec<u8> = Vec::with_capacity(MAX_BATCH);
     let mut last_flush = Instant::now();
+    let mut last_signals: Option<(bool, bool, bool, bool)> = None;
+    let mut last_signal_check = Instant::now() - SIGNAL_INTERVAL;
 
     let flush = |batch: &mut Vec<u8>, last_flush: &mut Instant| {
         if !batch.is_empty() {
@@ -175,6 +198,21 @@ fn read_loop(mut port: Box<dyn SerialPort>, stop: Arc<AtomicBool>, channel: Chan
         }
         if batch.len() >= MAX_BATCH || last_flush.elapsed() >= FLUSH_INTERVAL {
             flush(&mut batch, &mut last_flush);
+        }
+        if last_signal_check.elapsed() >= SIGNAL_INTERVAL {
+            last_signal_check = Instant::now();
+            // Some drivers do not report the input lines; those are shown as off.
+            let now = (
+                port.read_clear_to_send().unwrap_or(false),
+                port.read_data_set_ready().unwrap_or(false),
+                port.read_carrier_detect().unwrap_or(false),
+                port.read_ring_indicator().unwrap_or(false),
+            );
+            if last_signals != Some(now) {
+                last_signals = Some(now);
+                let (cts, dsr, cd, ri) = now;
+                let _ = channel.send(SerialEvent::Signals { cts, dsr, cd, ri });
+            }
         }
     };
 
