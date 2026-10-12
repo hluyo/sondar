@@ -3,9 +3,16 @@
 //! Incoming bytes are batched (at most every `FLUSH_INTERVAL` or `MAX_BATCH` bytes)
 //! and streamed to the frontend through a Tauri channel, so a fast device does not
 //! flood the UI with one message per byte.
+//!
+//! Writes also go through the reader thread. On Windows the read and write timeouts
+//! are one setting shared by every handle of the port, and the short read timeout
+//! would cut long writes (a 500-byte burst takes ~45 ms at 115200 baud). The thread
+//! raises the timeout for the length of each write and puts it back afterwards;
+//! bytes received meanwhile wait in the driver's buffer.
 
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -20,6 +27,21 @@ const FLUSH_INTERVAL: Duration = Duration::from_millis(16);
 const MAX_BATCH: usize = 16 * 1024;
 /// How often the input lines (CTS, DSR, CD, RI) are checked.
 const SIGNAL_INTERVAL: Duration = Duration::from_millis(100);
+/// Extra time allowed for a write on top of what the bytes take on the wire.
+const WRITE_MARGIN: Duration = Duration::from_millis(1000);
+
+/// A write handed to the reader thread, with where to report how it went.
+struct WriteRequest {
+    data: Vec<u8>,
+    done: Sender<Result<(), String>>,
+}
+
+/// Time the bytes take on the wire, counting 12 bits per byte (start, 8 data, parity, 2 stop)
+/// so it is never short, doubled for USB and driver latency, plus a fixed margin.
+fn write_timeout(len: usize, baud_rate: u32) -> Duration {
+    let wire_ms = (len as u64 * 12 * 1000) / u64::from(baud_rate.max(1));
+    Duration::from_millis(wire_ms * 2) + WRITE_MARGIN
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +82,10 @@ pub enum SerialEvent {
 }
 
 struct Connection {
+    /// Used for the control lines only; data writes go through `writes`.
     writer: Box<dyn SerialPort>,
+    writes: Sender<WriteRequest>,
+    baud_rate: u32,
     stop: Arc<AtomicBool>,
     reader: Option<JoinHandle<()>>,
 }
@@ -155,23 +180,33 @@ pub fn open_port(
 
     let reader_port = port.try_clone().map_err(|e| e.to_string())?;
     let stop = Arc::new(AtomicBool::new(false));
+    let (writes, write_queue) = mpsc::channel();
+    let baud_rate = config.baud_rate;
     let reader = {
         let stop = stop.clone();
         std::thread::Builder::new()
-            .name("serial-reader".into())
-            .spawn(move || read_loop(reader_port, stop, on_event))
+            .name("serial-io".into())
+            .spawn(move || io_loop(reader_port, baud_rate, stop, write_queue, on_event))
             .map_err(|e| e.to_string())?
     };
 
     *guard = Some(Connection {
         writer: port,
+        writes,
+        baud_rate,
         stop,
         reader: Some(reader),
     });
     Ok(())
 }
 
-fn read_loop(mut port: Box<dyn SerialPort>, stop: Arc<AtomicBool>, channel: Channel<SerialEvent>) {
+fn io_loop(
+    mut port: Box<dyn SerialPort>,
+    baud_rate: u32,
+    stop: Arc<AtomicBool>,
+    write_queue: Receiver<WriteRequest>,
+    channel: Channel<SerialEvent>,
+) {
     let mut buf = [0u8; 4096];
     let mut batch: Vec<u8> = Vec::with_capacity(MAX_BATCH);
     let mut last_flush = Instant::now();
@@ -199,6 +234,10 @@ fn read_loop(mut port: Box<dyn SerialPort>, stop: Arc<AtomicBool>, channel: Chan
         if batch.len() >= MAX_BATCH || last_flush.elapsed() >= FLUSH_INTERVAL {
             flush(&mut batch, &mut last_flush);
         }
+        while let Ok(request) = write_queue.try_recv() {
+            let result = write_with_timeout(&mut *port, &request.data, baud_rate);
+            let _ = request.done.send(result);
+        }
         if last_signal_check.elapsed() >= SIGNAL_INTERVAL {
             last_signal_check = Instant::now();
             // Some drivers do not report the input lines; those are shown as off.
@@ -220,6 +259,20 @@ fn read_loop(mut port: Box<dyn SerialPort>, stop: Arc<AtomicBool>, channel: Chan
     let _ = channel.send(SerialEvent::Closed { reason });
 }
 
+fn write_with_timeout(
+    port: &mut dyn SerialPort,
+    data: &[u8],
+    baud_rate: u32,
+) -> Result<(), String> {
+    port.set_timeout(write_timeout(data.len(), baud_rate))
+        .map_err(|e| e.to_string())?;
+    let result = port.write_all(data).and_then(|_| port.flush());
+    // Back to the short timeout so reads stay responsive, even if the write failed.
+    let restored = port.set_timeout(READ_TIMEOUT);
+    result.map_err(|e| e.to_string())?;
+    restored.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn close_port(state: State<'_, SerialState>) -> Result<(), String> {
     let connection = state.0.lock().map_err(|e| e.to_string())?.take();
@@ -231,13 +284,23 @@ pub fn close_port(state: State<'_, SerialState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn write_port(state: State<'_, SerialState>, data: Vec<u8>) -> Result<(), String> {
-    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
-    let connection = guard.as_mut().ok_or("Port is not open")?;
-    connection
-        .writer
-        .write_all(&data)
-        .map_err(|e| e.to_string())?;
-    connection.writer.flush().map_err(|e| e.to_string())
+    let (done, result) = mpsc::channel();
+    let wait = {
+        let guard = state.0.lock().map_err(|e| e.to_string())?;
+        let connection = guard.as_ref().ok_or("Port is not open")?;
+        let wait = write_timeout(data.len(), connection.baud_rate) + WRITE_MARGIN;
+        connection
+            .writes
+            .send(WriteRequest { data, done })
+            .map_err(|_| "Port is not open")?;
+        wait
+    };
+    // The lock is released while waiting, so closing the port is never blocked by a write.
+    match result.recv_timeout(wait) {
+        Ok(outcome) => outcome,
+        Err(mpsc::RecvTimeoutError::Timeout) => Err("Write timed out".into()),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err("Port closed during the write".into()),
+    }
 }
 
 #[tauri::command]

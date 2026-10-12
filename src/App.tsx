@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConnectionBar, type ConnectionStatus } from "./components/ConnectionBar";
+import { MapPanel } from "./components/MapPanel";
 import { PlotPanel } from "./components/PlotPanel";
 import { QuickCommands } from "./components/QuickCommands";
+import { RoutePanel } from "./components/RoutePanel";
+import { SidePanel } from "./components/SidePanel";
+import { SimulatorPanel } from "./components/SimulatorPanel";
+import { SimulatorTab } from "./components/SimulatorTab";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { encodeCommand } from "./lib/encoding";
 import { fileStamp, openFolder, saveExport } from "./lib/files";
+import { FAULT_LABELS, type GpsConfig, GpsSimulator } from "./lib/gpsSimulator";
 import { PlotStore } from "./lib/plotStore";
+import { PositionTracker } from "./lib/positionTracker";
+import { loadSavedRoute, type RouteData, saveRoute } from "./lib/routeData";
+import { RoutePlayer } from "./lib/routePlayer";
 import {
   closePort,
   frameLabel,
@@ -39,6 +48,7 @@ export default function App() {
 
   const bus = useMemo(() => new Emitter<StreamEvent>(), []);
   const plotStore = useMemo(() => new PlotStore(), []);
+  const tracker = useMemo(() => new PositionTracker(), []);
   const countersRef = useRef({ rx: 0, tx: 0 });
   const settingsRef = useRef(settings);
   const statusRef = useRef(status);
@@ -48,6 +58,30 @@ export default function App() {
 
   settingsRef.current = settings;
   statusRef.current = status;
+
+  // Plays a recorded route (one NMEA burst per file) and grades the device's answers.
+  const player = useMemo(() => {
+    const p = new RoutePlayer({
+      send: async (bytes, lines) => {
+        if (statusRef.current !== "connected") throw new Error("the port is closed");
+        await writePort(bytes);
+        countersRef.current.tx += bytes.length;
+        const onlyGga = settingsRef.current.routeTxOnlyGga;
+        const time = Date.now();
+        for (const l of lines) {
+          if (!onlyGga || l.isGga) bus.emit({ kind: "tx", text: l.text, bytes: l.bytes, ending: "crlf", time, note: l.note });
+        }
+      },
+      report: (level, text) => bus.emit({ kind: level, text, time: Date.now() }),
+      onRestart: () => tracker.clear(),
+    });
+    const s = settingsRef.current;
+    p.speed = s.routeSpeed;
+    p.loop = s.routeLoop;
+    p.faults = s.routeFaults;
+    p.route = loadSavedRoute();
+    return p;
+  }, [bus, tracker]);
 
   const info = useCallback((text: string) => bus.emit({ kind: "info", text, time: Date.now() }), [bus]);
   const error = useCallback((text: string) => bus.emit({ kind: "error", text, time: Date.now() }), [bus]);
@@ -63,10 +97,104 @@ export default function App() {
   useEffect(
     () =>
       bus.on((e) => {
-        if (e.kind === "rx") plotStore.pushBytes(e.bytes, e.time);
+        if (e.kind === "rx") {
+          plotStore.pushBytes(e.bytes, e.time);
+          tracker.pushBytes(e.bytes, e.time);
+          player.pushBytes(e.bytes);
+        }
         logRef.current?.handle(e);
       }),
-    [bus, plotStore],
+    [bus, plotStore, tracker, player],
+  );
+
+  // The GPS simulator writes its sentences straight to the port and into the stream,
+  // so they show up in the terminal (and the log) like any other transmitted line.
+  const simulator = useMemo(() => {
+    const sim: GpsSimulator = new GpsSimulator(settingsRef.current.gps, (frame) => {
+      if (statusRef.current !== "connected") {
+        sim.stop();
+        return;
+      }
+      writePort(frame.bytes)
+        .then(() => {
+          countersRef.current.tx += frame.bytes.length;
+          const fault = frame.fault ?? (frame.garbage ? "garbage" : null);
+          bus.emit({
+            kind: "tx",
+            text: frame.text,
+            bytes: frame.bytes,
+            ending: "crlf",
+            time: frame.time,
+            note: fault ? `injected: ${FAULT_LABELS[fault]}` : undefined,
+          });
+        })
+        .catch((e) => {
+          sim.stop();
+          error(`Simulator stopped, send failed: ${e}`);
+        });
+    });
+    return sim;
+  }, [bus, error]);
+  const simulatorRunning = useSimulatorRunning(simulator);
+  const playerState = usePlayerState(player);
+
+  useEffect(
+    () => () => {
+      simulator.stop();
+      player.pause();
+    },
+    [simulator, player],
+  );
+  useEffect(() => {
+    if (status !== "connected") {
+      simulator.stop();
+      player.pause();
+    }
+  }, [status, simulator, player]);
+
+  // Only one GPS source talks to the device at a time.
+  useEffect(() => {
+    const offSim = simulator.changes.on(() => {
+      if (simulator.running && player.playing) player.pause();
+    });
+    const offPlayer = player.changes.on(() => {
+      if (player.playing && simulator.running) simulator.stop();
+    });
+    return () => {
+      offSim();
+      offPlayer();
+    };
+  }, [simulator, player]);
+
+  const loadRoute = useCallback(
+    (route: RouteData) => {
+      player.setRoute(route);
+      saveRoute(route);
+      info(`Route loaded: ${route.name} · ${route.steps.length} bursts · ${route.startLabel} → ${route.endLabel}`);
+    },
+    [player, info],
+  );
+
+  const exportFile = useCallback(
+    async (name: string, contents: string) => {
+      try {
+        const path = await saveExport(name, contents);
+        info(`Exported: ${path}`);
+        return path;
+      } catch (e) {
+        error(`Could not export: ${e}`);
+        return null;
+      }
+    },
+    [info, error],
+  );
+
+  const setGps = useCallback(
+    (gps: GpsConfig) => {
+      update({ gps });
+      simulator.setConfig(gps);
+    },
+    [update, simulator],
   );
 
   // Keep the port list fresh while disconnected so plugging a board in shows up.
@@ -250,8 +378,10 @@ export default function App() {
 
   const clearAll = useCallback(() => {
     plotStore.clear();
+    tracker.clear();
+    simulator.clearTrail();
     countersRef.current = { rx: 0, tx: 0 };
-  }, [plotStore]);
+  }, [plotStore, tracker, simulator]);
 
   return (
     <div className="flex h-full flex-col">
@@ -288,21 +418,60 @@ export default function App() {
           onOpenLogFolder={() => showFolder("logs")}
         />
         {settings.showPlot && (
-          <PlotPanel
-            store={plotStore}
-            theme={theme}
-            windowSeconds={settings.plotWindow}
-            onWindowChange={(plotWindow) => update({ plotWindow })}
-            onExport={exportPlot}
-            onOpenExportFolder={() => showFolder("exports")}
-            yAxis={{ mode: settings.plotYMode, min: settings.plotYMin, max: settings.plotYMax }}
-            onYAxisChange={(a) =>
-              update({
-                ...(a.mode !== undefined && { plotYMode: a.mode }),
-                ...(a.min !== undefined && { plotYMin: a.min }),
-                ...(a.max !== undefined && { plotYMax: a.max }),
-              })
-            }
+          <SidePanel
+            tab={settings.sideTab}
+            onTabChange={(sideTab) => update({ sideTab })}
+            badges={{ simulator: simulatorRunning ? `GGA ${settings.gps.rate} Hz` : playerState.playing ? `route ×${settings.routeSpeed}` : undefined }}
+            panels={{
+              plot: (
+                <PlotPanel
+                  store={plotStore}
+                  theme={theme}
+                  windowSeconds={settings.plotWindow}
+                  onWindowChange={(plotWindow) => update({ plotWindow })}
+                  onExport={exportPlot}
+                  onOpenExportFolder={() => showFolder("exports")}
+                  yAxis={{ mode: settings.plotYMode, min: settings.plotYMin, max: settings.plotYMax }}
+                  onYAxisChange={(a) =>
+                    update({
+                      ...(a.mode !== undefined && { plotYMode: a.mode }),
+                      ...(a.min !== undefined && { plotYMin: a.min }),
+                      ...(a.max !== undefined && { plotYMax: a.max }),
+                    })
+                  }
+                />
+              ),
+              map: <MapPanel tracker={tracker} simulator={simulator} player={player} theme={theme} visible={settings.sideTab === "map"} />,
+              simulator: (
+                <SimulatorTab
+                  source={settings.simSource}
+                  onSourceChange={(simSource) => update({ simSource })}
+                  route={
+                    <RoutePanel
+                      player={player}
+                      tracker={tracker}
+                      connected={status === "connected"}
+                      speed={settings.routeSpeed}
+                      loop={settings.routeLoop}
+                      txOnlyGga={settings.routeTxOnlyGga}
+                      faults={settings.routeFaults}
+                      onChange={(patch) => {
+                        update(patch);
+                        if (patch.routeSpeed !== undefined) player.setSpeed(patch.routeSpeed);
+                        if (patch.routeLoop !== undefined) player.setLoop(patch.routeLoop);
+                        if (patch.routeFaults !== undefined) player.setFaults(patch.routeFaults);
+                      }}
+                      onRouteLoaded={loadRoute}
+                      onExport={exportFile}
+                      onOpenExportFolder={() => showFolder("exports")}
+                    />
+                  }
+                  synthetic={
+                    <SimulatorPanel simulator={simulator} config={settings.gps} onConfigChange={setGps} connected={status === "connected"} />
+                  }
+                />
+              ),
+            }}
           />
         )}
       </main>
@@ -320,9 +489,46 @@ export default function App() {
             LOG {formatBytes(log.bytes)}
           </span>
         )}
+        {playerState.playing && (
+          <span className="inline-flex items-center gap-1.5 text-accent">
+            <span className="size-1.5 rounded-full bg-accent" />
+            ROUTE {playerState.position}/{playerState.total} ×{settings.routeSpeed}
+          </span>
+        )}
+        {simulatorRunning && (
+          <span className="inline-flex items-center gap-1.5 text-accent">
+            <span className="size-1.5 rounded-full bg-accent" />
+            SIM GPS {settings.gps.talker}GGA {settings.gps.rate} Hz
+          </span>
+        )}
         <span className="flex-1" />
         <span>UTF-8</span>
       </footer>
     </div>
   );
+}
+
+/** Re-renders only when the simulator starts or stops, not on every sentence. */
+function useSimulatorRunning(simulator: GpsSimulator) {
+  const [running, setRunning] = useState(simulator.running);
+  useEffect(() => simulator.changes.on(() => setRunning(simulator.running)), [simulator]);
+  return running;
+}
+
+/** Playback state for the footer and the tab badge, without re-rendering on every answer. */
+function usePlayerState(player: RoutePlayer) {
+  const [state, setState] = useState(() => readPlayer(player));
+  useEffect(
+    () =>
+      player.changes.on(() => {
+        const next = readPlayer(player);
+        setState((prev) => (prev.playing === next.playing && prev.position === next.position && prev.total === next.total ? prev : next));
+      }),
+    [player],
+  );
+  return state;
+}
+
+function readPlayer(player: RoutePlayer) {
+  return { playing: player.playing, position: player.position, total: player.route?.steps.length ?? 0 };
 }

@@ -101,7 +101,7 @@ function TitleBar({ settings, update, status, connectedAt, theme, onToggleTheme 
         {theme === "dark" ? <SunIcon /> : <MoonIcon />}
       </IconButton>
       <IconButton
-        label={settings.showPlot ? "Hide plot" : "Show plot"}
+        label={settings.showPlot ? "Hide side panel (plot, map, simulator)" : "Show side panel (plot, map, simulator)"}
         onClick={() => update({ showPlot: !settings.showPlot })}
         className={settings.showPlot ? "text-accent" : ""}
       >
