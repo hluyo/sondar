@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { LineEnding } from "./encoding";
 import type { FlowControl, Parity, PortConfig } from "./serial";
+import { DEFAULT_GPS_CONFIG, type GpsConfig } from "./gpsSimulator";
+import { DEFAULT_ROUTE_FAULTS, type RouteFaults, type Speed } from "./routePlayer";
+import type { LanguagePreference } from "./i18n";
 import type { ThemePreference } from "./theme";
 
 export interface QuickCommand {
@@ -10,6 +13,7 @@ export interface QuickCommand {
 }
 
 export type YAxisMode = "auto" | "expand" | "manual";
+export type SideTab = "plot" | "gps";
 
 export interface Settings {
   port: string;
@@ -31,6 +35,17 @@ export interface Settings {
   history: string[];
   quickCommands: QuickCommand[];
   theme: ThemePreference;
+  sideTab: SideTab;
+  /** Width of the side panel in px; the user drags its edge to change it. */
+  sidePanelWidth: number;
+  language: LanguagePreference;
+  gps: GpsConfig;
+  /** What the GPS tab plays: a recorded route (frame files) or the synthetic GPS. */
+  simSource: "route" | "synthetic";
+  routeSpeed: Speed;
+  routeLoop: boolean;
+  routeTxOnlyGga: boolean;
+  routeFaults: RouteFaults;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -51,16 +66,41 @@ export const DEFAULT_SETTINGS: Settings = {
   plotYMin: null,
   plotYMax: null,
   history: [],
-  quickCommands: [{ id: "q1", name: "Read", command: "READ" }],
+  quickCommands: [],
   theme: "system",
+  sideTab: "plot",
+  sidePanelWidth: 540,
+  language: "auto",
+  gps: DEFAULT_GPS_CONFIG,
+  simSource: "route",
+  routeSpeed: 1,
+  routeLoop: false,
+  routeTxOnlyGga: false,
+  routeFaults: DEFAULT_ROUTE_FAULTS,
 };
 
-const KEY = "sonda-serial.settings.v1";
+const KEY = "sondar.settings.v1";
+
+/** Forgets the saved settings, as on a fresh install. The caller reloads the app. */
+export function forgetSettings() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // Nothing stored, or storage unavailable: already clean.
+  }
+}
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw);
+      const gps = { ...DEFAULT_GPS_CONFIG, ...saved.gps, faults: { ...DEFAULT_GPS_CONFIG.faults, ...saved.gps?.faults } };
+      const routeFaults = { ...DEFAULT_ROUTE_FAULTS, ...saved.routeFaults };
+      // The Map and Simulator tabs became a single GPS tab.
+      const sideTab: SideTab = saved.sideTab === "plot" ? "plot" : saved.sideTab ? "gps" : DEFAULT_SETTINGS.sideTab;
+      return { ...DEFAULT_SETTINGS, ...saved, gps, routeFaults, sideTab };
+    }
   } catch {
     // Corrupt or unavailable storage: start from the defaults.
   }

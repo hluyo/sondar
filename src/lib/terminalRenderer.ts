@@ -11,51 +11,53 @@ const DIM = "\x1b[90m";
 const TX = "\x1b[34m";
 const INFO = "\x1b[37m";
 const ERROR = "\x1b[31m";
+const WARN = "\x1b[33m";
 
 const BASE = { background: "#00000000", cursor: "#00000000", cursorAccent: "#00000000" };
 
+// Windows Terminal's "Campbell" palette in dark mode; a matching light version.
 const THEMES: Record<Theme, ITheme> = {
   dark: {
     ...BASE,
-    foreground: "#e7eaee",
-    selectionBackground: "#2b4a6e",
-    black: "#1d222a",
-    red: "#ff7b7b",
-    green: "#3dd68c",
-    yellow: "#f5c451",
-    blue: "#6cb6ff",
-    magenta: "#c79bff",
-    cyan: "#4fd1c5",
-    white: "#c9cfd8",
-    brightBlack: "#7a8392",
-    brightRed: "#ff9d9d",
-    brightGreen: "#6ee7a8",
-    brightYellow: "#ffd97a",
-    brightBlue: "#9acbff",
-    brightMagenta: "#dcbcff",
-    brightCyan: "#7fe3d8",
+    foreground: "#f2f2f2",
+    selectionBackground: "#264f78",
+    black: "#0c0c0c",
+    red: "#e74856",
+    green: "#16c60c",
+    yellow: "#f9f1a5",
+    blue: "#60cdff",
+    magenta: "#b4009e",
+    cyan: "#61d6d6",
+    white: "#a6a6a6",
+    brightBlack: "#8f8f8f",
+    brightRed: "#ff99a4",
+    brightGreen: "#6ccb5f",
+    brightYellow: "#fce100",
+    brightBlue: "#99ebff",
+    brightMagenta: "#d670d6",
+    brightCyan: "#9cf0f0",
     brightWhite: "#ffffff",
   },
   light: {
     ...BASE,
-    foreground: "#161a20",
-    selectionBackground: "#b6d4fb",
-    black: "#1d222a",
-    red: "#d93636",
-    green: "#1a7f4b",
-    yellow: "#9a6700",
-    blue: "#1f6fd1",
-    magenta: "#8250df",
-    cyan: "#0f7b8a",
-    white: "#5d6675",
-    brightBlack: "#7f8896",
-    brightRed: "#e5534b",
-    brightGreen: "#22a05e",
-    brightYellow: "#b7791f",
-    brightBlue: "#3b82f6",
-    brightMagenta: "#a371f7",
-    brightCyan: "#1b9aaa",
-    brightWhite: "#161a20",
+    foreground: "#1a1a1a",
+    selectionBackground: "#cce4f7",
+    black: "#0c0c0c",
+    red: "#c42b1c",
+    green: "#0f7b0f",
+    yellow: "#9d5d00",
+    blue: "#005fb8",
+    magenta: "#881798",
+    cyan: "#0e7490",
+    white: "#5f5f5f",
+    brightBlack: "#767676",
+    brightRed: "#c50f1f",
+    brightGreen: "#13a10e",
+    brightYellow: "#c19c00",
+    brightBlue: "#0037da",
+    brightMagenta: "#b4009e",
+    brightCyan: "#3a96dd",
+    brightWhite: "#1a1a1a",
   },
 };
 const HEX_PER_LINE = 16;
@@ -87,7 +89,7 @@ export class TerminalRenderer {
 
   constructor(container: HTMLElement, theme: Theme) {
     this.term = new Terminal({
-      fontFamily: '"JetBrains Mono Variable", ui-monospace, monospace',
+      fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace',
       fontSize: 13,
       lineHeight: 1.35,
       convertEol: true,
@@ -167,8 +169,11 @@ export class TerminalRenderer {
     this.onPendingChange?.(0);
   }
 
-  private prefix(time: number) {
-    return this.timestamps ? `${DIM}${clockTime(time)}${RESET}  ` : "";
+  /** Time (optional) and a direction tag, so received and sent lines are easy to tell apart. */
+  private prefix(time: number, tag: "rx" | "tx" | "none") {
+    const clock = this.timestamps ? `${DIM}${clockTime(time)}${RESET}  ` : "";
+    const badge = tag === "rx" ? `${INFO}RX${RESET}  ` : tag === "tx" ? `${TX}TX${RESET}  ` : "    ";
+    return clock + badge;
   }
 
   /** Newline only if the cursor is not already at the start of a line. */
@@ -187,12 +192,13 @@ export class TerminalRenderer {
         if (!this.echo) return "";
         const ending = LINE_ENDINGS.find((e) => e.id === event.ending)?.escaped ?? "";
         const body = this.mode === "hex" ? toHex(event.bytes) : `${event.text}${DIM}  ${ending}`;
-        return `${this.breakLine()}${this.prefix(event.time)}${TX}${body}${RESET}\n`;
+        const note = event.note ? `${WARN}  « ${event.note}` : "";
+        return `${this.breakLine()}${this.prefix(event.time, "tx")}${TX}${body}${note}${RESET}\n`;
       }
       case "info":
-        return `${this.breakLine()}${this.prefix(event.time)}${INFO}── ${event.text} ──${RESET}\n`;
+        return `${this.breakLine()}${this.prefix(event.time, "none")}${INFO}── ${event.text} ──${RESET}\n`;
       case "error":
-        return `${this.breakLine()}${this.prefix(event.time)}${ERROR}${event.text}${RESET}\n`;
+        return `${this.breakLine()}${this.prefix(event.time, "none")}${ERROR}${event.text}${RESET}\n`;
     }
   }
 
@@ -207,7 +213,7 @@ export class TerminalRenderer {
       }
       if (!part) return;
       if (this.atLineStart) {
-        out += this.prefix(time);
+        out += this.prefix(time, "rx");
         this.atLineStart = false;
       }
       out += part;
@@ -218,7 +224,7 @@ export class TerminalRenderer {
   private renderHex(bytes: Uint8Array, time: number) {
     let out = "";
     for (const b of bytes) {
-      if (this.hexColumn === 0) out += this.prefix(time);
+      if (this.hexColumn === 0) out += this.prefix(time, "rx");
       const hex = b.toString(16).toUpperCase().padStart(2, "0");
       out += b === 0x0a || b === 0x0d ? `${DIM}${hex}${RESET} ` : `${hex} `;
       this.hexColumn++;

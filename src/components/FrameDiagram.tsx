@@ -1,3 +1,4 @@
+import { formatNumber, t } from "../lib/i18n";
 import type { PortConfig } from "../lib/serial";
 
 /** Example character drawn on the line: 'A' = 0x41 = 0100 0001. */
@@ -76,20 +77,20 @@ export function FrameDiagram(props: Pick<PortConfig, "baudRate" | "dataBits" | "
 
   return (
     <div className="flex flex-col gap-2">
-      <svg viewBox={`0 0 ${width} 74`} role="img" aria-label="UART frame diagram" className="block h-auto w-full">
+      <svg viewBox={`0 0 ${width} 74`} role="img" aria-label={t("UART frame")} className="block h-auto w-full">
         <line x1={0} y1={HIGH} x2={width} y2={HIGH} strokeDasharray="3 3" className="stroke-line-focus" />
         {drawn}
         <polyline points={wave} fill="none" strokeWidth={2} strokeLinejoin="round" className="stroke-accent" />
       </svg>
       <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11.5px] text-muted tabular-nums">
         <span>
-          <b className="font-medium text-fg">{bits}</b> bits per character
+          <b className="font-medium text-fg">{bits}</b> {t("bits per character")}
         </span>
         <span>
-          bit <b className="font-medium text-fg">{bitTime(props.baudRate)}</b>
+          {t("1 bit")} = <b className="font-medium text-fg">{bitTime(props.baudRate)}</b>
         </span>
         <span>
-          max <b className="font-medium text-fg">{Math.floor(props.baudRate / bits).toLocaleString("en-US")}</b> chars/s
+          {t("max")} <b className="font-medium text-fg">{formatNumber(Math.floor(props.baudRate / bits))}</b> {t("chars/s")}
         </span>
       </div>
     </div>

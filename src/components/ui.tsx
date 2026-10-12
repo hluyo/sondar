@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 /** Radio option in the style of the connection panel groups. */
 export function Radio({
@@ -119,4 +119,36 @@ export function IconButton({
 
 export function PanelTitle({ children }: { children: ReactNode }) {
   return <h2 className="m-0 text-xs font-semibold uppercase tracking-[0.06em] text-muted">{children}</h2>;
+}
+
+/** A titled section that folds away; closed by default to keep screens short. */
+export function Collapsible({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="overflow-hidden rounded-lg border border-line">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex h-11 w-full items-center gap-2.5 bg-raised px-3 text-left text-fg hover:bg-field"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d={open ? "m6 9 6 6 6-6" : "m9 6 6 6-6 6"} />
+        </svg>
+        <span className="font-semibold">{title}</span>
+        {summary && <span className="ml-auto truncate text-xs text-muted">{summary}</span>}
+      </button>
+      {open && <div className="border-t border-line px-3 py-2.5">{children}</div>}
+    </div>
+  );
 }

@@ -3,8 +3,9 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import { type ChannelStats, CHANNEL_COLORS, PlotStore } from "../lib/plotStore";
 import type { YAxisMode } from "../lib/settings";
+import { t } from "../lib/i18n";
 import { cssColor, type Theme } from "../lib/theme";
-import { PauseIcon, PlayIcon, RefreshIcon } from "./icons";
+import { DownloadIcon, FolderIcon, PauseIcon, PlayIcon, RefreshIcon } from "./icons";
 import { IconButton, Segmented } from "./ui";
 
 export interface YAxis {
@@ -20,6 +21,9 @@ interface Props {
   onWindowChange: (seconds: number) => void;
   yAxis: YAxis;
   onYAxisChange: (axis: Partial<YAxis>) => void;
+  /** Saves the plot data as CSV; resolves to the file path, or null on failure. */
+  onExport: () => Promise<string | null>;
+  onOpenExportFolder: () => void;
 }
 
 const WINDOWS = [5, 10, 30, 60];
@@ -38,7 +42,7 @@ function axis(): uPlot.Axis {
     stroke: cssColor("--color-dim"),
     grid: { stroke: cssColor("--color-grid"), width: 1 },
     ticks: { stroke: cssColor("--color-line"), width: 1, size: 4 },
-    font: '11px "JetBrains Mono Variable", monospace',
+    font: '11px "Cascadia Mono", Consolas, ui-monospace, monospace',
   };
 }
 
@@ -48,13 +52,16 @@ function chartOptions(
   height: number,
   hidden: Record<string, boolean>,
   yRange: uPlot.Range.Function,
+  onSelect: (u: uPlot) => void,
 ): uPlot.Options {
   const a = axis();
   return {
     width,
     height,
     legend: { show: false },
-    cursor: { drag: { x: false, y: false }, points: { size: 6 } },
+    // Dragging selects a time span to zoom into; the panel applies it (and double-click resets).
+    cursor: { drag: { x: true, y: false, setScale: false }, points: { size: 6 }, bind: { dblclick: () => null } },
+    hooks: { setSelect: [onSelect] },
     scales: { x: { time: true }, y: { range: yRange } },
     axes: [{ ...a, space: 70 }, { ...a, size: 56 }],
     series: [
@@ -81,7 +88,7 @@ function tidy(v: number) {
   return Number(v.toPrecision(3));
 }
 
-export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, onYAxisChange }: Props) {
+export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, onYAxisChange, onExport, onOpenExportFolder }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const windowRef = useRef(windowSeconds);
@@ -91,6 +98,12 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
   const yAxisRef = useRef(yAxis);
   /** Range reached so far in "expand" mode. */
   const heldRef = useRef<[number, number] | null>(null);
+  /** Time span being inspected, or null while following live data. */
+  const zoomRef = useRef<[number, number] | null>(null);
+  /** Last live time span drawn, to come back to after a zoom. */
+  const liveRangeRef = useRef<[number, number] | null>(null);
+  const [zoomed, setZoomed] = useState(false);
+  const [exported, setExported] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const [stats, setStats] = useState<ChannelStats[]>([]);
@@ -127,11 +140,21 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
       return uPlot.rangeNum(lo, hi, 0.1, true);
     };
 
+    const onSelect = (u: uPlot) => {
+      const { left, width } = u.select;
+      if (width < 4) return;
+      const range: [number, number] = [u.posToVal(left, "x"), u.posToVal(left + width, "x")];
+      u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
+      zoomRef.current = range;
+      u.setScale("x", { min: range[0], max: range[1] });
+      setZoomed(true);
+    };
+
     const build = () => {
       plotRef.current?.destroy();
       const { width, height } = host.getBoundingClientRect();
       plotRef.current = new uPlot(
-        chartOptions(store.names, Math.max(width, 50), Math.max(height, 50), hiddenRef.current, yRange),
+        chartOptions(store.names, Math.max(width, 50), Math.max(height, 50), hiddenRef.current, yRange, onSelect),
         [[], ...store.names.map(() => [])],
         host,
       );
@@ -139,6 +162,8 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
       layout = store.layoutVersion;
       builtTheme = themeRef.current;
       drawnVersion = -1;
+      zoomRef.current = null;
+      setZoomed(false);
     };
 
     const loop = (now: number) => {
@@ -146,6 +171,7 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
       if (pausedRef.current) return;
       if (store.layoutVersion !== layout || themeRef.current !== builtTheme) build();
       const plot = plotRef.current!;
+      if (zoomRef.current) return; // frozen while zoomed in
 
       const t = Date.now() / 1000;
       const win = windowRef.current;
@@ -157,6 +183,7 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
         const start = Math.max(0, store.firstIndexFrom(t - win) - 1);
         plot.setData([store.x.slice(start), ...store.ys.map((y) => y.slice(start))] as uPlot.AlignedData, false);
         plot.setScale("x", { min: t - win, max: t });
+        liveRangeRef.current = [t - win, t];
         drawnVersion = store.version;
         drawnWindow = win;
         lastDraw = now;
@@ -207,6 +234,22 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
     }
   };
 
+  const resetZoom = () => {
+    if (!zoomRef.current) return;
+    zoomRef.current = null;
+    setZoomed(false);
+    const live = liveRangeRef.current;
+    if (live) plotRef.current?.setScale("x", { min: live[0], max: live[1] });
+  };
+
+  const exportCsv = async () => {
+    const path = await onExport();
+    if (path) {
+      setExported(path.split(/[\\/]/).pop() ?? path);
+      window.setTimeout(() => setExported(null), 8000);
+    }
+  };
+
   const togglePaused = () => {
     pausedRef.current = !paused;
     setPaused(!paused);
@@ -224,36 +267,49 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
   const hideAll = () => applyHidden(Object.fromEntries(store.names.map((n) => [n, true])));
 
   return (
-    <section aria-label="Live plot" className="flex min-h-0 w-[min(40%,560px)] min-w-[360px] shrink-0 flex-col gap-3 rounded-xl border border-line bg-panel px-4 py-3.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-2.5">
         <div className="flex flex-1 flex-col gap-0.5">
-          <h2 className="m-0 text-[15px] font-semibold">Live plot</h2>
-          <span className="text-xs text-muted">Fed by the same lines as the terminal</span>
+          <h2 className="m-0 text-[15px] font-semibold">{t("Live plot")}</h2>
+          <span className="text-xs text-muted">{t("Fed by the same lines as the terminal · drag to zoom")}</span>
         </div>
         <Segmented
-          label="Time window"
+          label={t("Time window")}
           mono
           value={windowSeconds}
           options={WINDOWS.map((w) => ({ value: w, label: `${w} s` }))}
           onChange={onWindowChange}
         />
-        <IconButton label={paused ? "Resume plot" : "Pause plot"} onClick={togglePaused}>
+        <IconButton label={paused ? t("Resume plot") : t("Pause plot")} onClick={togglePaused}>
           {paused ? <PlayIcon size={14} /> : <PauseIcon size={14} />}
+        </IconButton>
+        <IconButton label={t("Export data to CSV")} onClick={exportCsv} disabled={stats.length === 0}>
+          <DownloadIcon size={14} />
         </IconButton>
       </div>
 
+      {exported && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-1.5 text-xs text-fg-2">
+          {t("Saved")} <span className="font-mono">{exported}</span>
+          <button type="button" onClick={onOpenExportFolder} className="ml-auto flex items-center gap-1.5 font-medium text-accent hover:underline">
+            <FolderIcon size={13} />
+            {t("Open folder")}
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted">Y axis</span>
-        <Segmented label="Y axis" value={yAxis.mode} options={Y_MODES} onChange={setMode} />
+        <span className="text-xs text-muted">{t("Y axis")}</span>
+        <Segmented label={t("Y axis")} value={yAxis.mode} options={Y_MODES.map((m) => ({ ...m, label: t(m.label), title: t(m.title) }))} onChange={setMode} />
         {yAxis.mode === "expand" && (
           <button
             type="button"
             onClick={resetHeld}
-            title="Start growing again from the current data"
+            title={t("Start growing again from the current data")}
             className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs text-fg-2 hover:bg-raised"
           >
             <RefreshIcon size={13} />
-            Reset
+            {t("Reset")}
           </button>
         )}
         {yAxis.mode === "manual" && <ManualLimits yAxis={yAxis} onChange={onYAxisChange} />}
@@ -266,7 +322,7 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
               key={s.name}
               type="button"
               aria-pressed={!hidden[s.name]}
-              title={hidden[s.name] ? `Show ${s.name}` : `Hide ${s.name}`}
+              title={hidden[s.name] ? t("Show {name}", { name: s.name }) : t("Hide {name}", { name: s.name })}
               onClick={() => toggleChannel(s.name)}
               className={`flex h-9 items-center gap-2 rounded-full border px-3 ${
                 hidden[s.name] ? "border-line bg-transparent opacity-50" : "border-line-strong bg-raised"
@@ -289,10 +345,10 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
           {stats.length > 1 && (
             <span className="flex gap-1">
               <button type="button" onClick={showAll} className="h-7 rounded-md px-2 text-xs text-muted hover:bg-raised hover:text-fg-2">
-                All
+                {t("All")}
               </button>
               <button type="button" onClick={hideAll} className="h-7 rounded-md px-2 text-xs text-muted hover:bg-raised hover:text-fg-2">
-                None
+                {t("None")}
               </button>
             </span>
           )}
@@ -300,14 +356,25 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
       )}
 
       <div className="relative min-h-[200px] flex-1 overflow-hidden rounded-md bg-bg">
-        <div ref={hostRef} className="absolute inset-0" />
+        <div ref={hostRef} className="absolute inset-0" onDoubleClick={resetZoom} />
+        {zoomed && (
+          <button
+            type="button"
+            onClick={resetZoom}
+            title={t("Back to live data (or double-click the chart)")}
+            className="absolute top-2 right-2 flex h-8 items-center gap-1.5 rounded-full bg-accent px-3 text-xs font-semibold text-on-accent shadow-[0_4px_14px_var(--color-shadow)] hover:brightness-110"
+          >
+            <RefreshIcon size={13} />
+            {t("Reset zoom")}
+          </button>
+        )}
         {stats.length === 0 && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center p-6 text-center">
             <div className="flex max-w-80 flex-col gap-2 text-xs leading-relaxed text-muted">
-              <span className="text-[13px] text-fg-2">Lines with numbers are plotted here automatically</span>
+              <span className="text-[13px] text-fg-2">{t("Lines with numbers are plotted here automatically")}</span>
               <span>
-                For example <code className="font-mono text-fg-2">temp=24.5 hum=40</code>,{" "}
-                <code className="font-mono text-fg-2">temp:24.5,hum:40</code> or <code className="font-mono text-fg-2">24.5,40</code>
+                {t("For example")} <code className="font-mono text-fg-2">temp=24.5 hum=40</code>,{" "}
+                <code className="font-mono text-fg-2">temp:24.5,hum:40</code> {t("or")} <code className="font-mono text-fg-2">24.5,40</code>
               </span>
             </div>
           </div>
@@ -318,10 +385,10 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="text-right text-muted">
-              <th scope="col" className="border-b border-line py-1.5 text-left font-medium">Channel</th>
-              <th scope="col" className="border-b border-line py-1.5 font-medium">Min</th>
-              <th scope="col" className="border-b border-line py-1.5 font-medium">Max</th>
-              <th scope="col" className="border-b border-line py-1.5 font-medium">Mean</th>
+              <th scope="col" className="border-b border-line py-1.5 text-left font-medium">{t("Channel")}</th>
+              <th scope="col" className="border-b border-line py-1.5 font-medium">{t("Min")}</th>
+              <th scope="col" className="border-b border-line py-1.5 font-medium">{t("Max")}</th>
+              <th scope="col" className="border-b border-line py-1.5 font-medium">{t("Mean")}</th>
             </tr>
           </thead>
           <tbody>
@@ -341,7 +408,7 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
           </tbody>
         </table>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -367,7 +434,7 @@ function ManualLimits({ yAxis, onChange }: { yAxis: YAxis; onChange: (axis: Part
       <input
         value={value}
         inputMode="decimal"
-        aria-label={`Y axis ${label.toLowerCase()}`}
+        aria-label={`${t("Y axis")} ${label}`}
         aria-invalid={!valid}
         onChange={(e) => set(e.target.value)}
         onBlur={commit}
@@ -381,9 +448,9 @@ function ManualLimits({ yAxis, onChange }: { yAxis: YAxis; onChange: (axis: Part
 
   return (
     <>
-      {input("Min", minText, setMinText)}
-      {input("Max", maxText, setMaxText)}
-      {!valid && <span className="text-xs text-err">Min must be lower than Max</span>}
+      {input(t("Min"), minText, setMinText)}
+      {input(t("Max"), maxText, setMaxText)}
+      {!valid && <span className="text-xs text-err">{t("Min must be lower than Max")}</span>}
     </>
   );
 }

@@ -6,7 +6,7 @@ import type { LineEnding } from "./encoding";
  */
 export type StreamEvent =
   | { kind: "rx"; bytes: Uint8Array; time: number }
-  | { kind: "tx"; text: string; bytes: Uint8Array; ending: LineEnding; time: number }
+  | { kind: "tx"; text: string; bytes: Uint8Array; ending: LineEnding; time: number; note?: string }
   | { kind: "info"; text: string; time: number }
   | { kind: "error"; text: string; time: number };
 

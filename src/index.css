@@ -1,37 +1,48 @@
 @import "tailwindcss";
 
+/*
+ * Look and feel of Windows 11 (Fluent): system fonts, a light grey window
+ * background with white cards, 4 px controls and 8 px cards, and the system
+ * blue as the only accent. Dark mode follows Windows' dark palette.
+ */
 @theme {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
 
-  --color-bg: #0a0c0f;
-  --color-panel: #0d1014;
-  --color-raised: #12161c;
-  --color-field: #141820;
-  --color-line: #1d222a;
-  --color-line-strong: #232933;
-  --color-line-focus: #363e4b;
-  --color-fg: #e7eaee;
-  --color-fg-2: #c9cfd8;
-  --color-muted: #9aa3b2;
-  --color-dim: #7a8392;
-  --color-accent: #ffb020;
-  --color-on-accent: #14110a;
-  --color-ok: #3dd68c;
-  --color-tx: #6cb6ff;
-  --color-warn: #f5c451;
-  --color-err: #ff7b7b;
-  --color-sendbar: #0f1217;
-  --color-line-input: #2a303b;
-  --color-seg-on: #262c36;
-  --color-seg-on-fg: #f2f4f7;
-  --color-toggle-on: #1a1f27;
-  --color-row-line: #161a21;
-  --color-grid: #1a1f27;
-  --color-accent-soft: rgba(255, 176, 32, 0.14);
-  --color-ok-ring: rgba(61, 214, 140, 0.18);
-  --color-par: rgba(108, 182, 255, 0.1);
-  --color-shadow: rgba(0, 0, 0, 0.45);
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+
+  --color-bg: #1f1f1f;
+  --color-panel: #2b2b2b;
+  --color-raised: #323232;
+  --color-field: #2f2f2f;
+  --color-line: #3a3a3a;
+  --color-line-strong: #444444;
+  --color-line-focus: #5a5a5a;
+  --color-fg: #ffffff;
+  --color-fg-2: #d6d6d6;
+  --color-muted: #a6a6a6;
+  --color-dim: #8f8f8f;
+  --color-accent: #60cdff;
+  --color-on-accent: #000000;
+  --color-ok: #6ccb5f;
+  --color-tx: #60cdff;
+  --color-warn: #fce100;
+  --color-err: #ff99a4;
+  --color-sendbar: #2b2b2b;
+  --color-line-input: #474747;
+  --color-seg-on: #3d3d3d;
+  --color-seg-on-fg: #ffffff;
+  --color-toggle-on: #3a3a3a;
+  --color-row-line: #333333;
+  --color-grid: #353535;
+  --color-accent-soft: rgba(96, 205, 255, 0.14);
+  --color-ok-ring: rgba(108, 203, 95, 0.2);
+  --color-par: rgba(96, 205, 255, 0.1);
+  --color-shadow: rgba(0, 0, 0, 0.4);
 }
 
 /* Dark is the default; light mode overrides the same tokens. */
@@ -40,34 +51,34 @@
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #f3f4f6;
-  --color-panel: #fafbfc;
+  --color-bg: #f3f3f3;
+  --color-panel: #fbfbfb;
   --color-raised: #ffffff;
-  --color-field: #eef0f3;
-  --color-line: #e3e6eb;
-  --color-line-strong: #d5d9e0;
-  --color-line-focus: #b4bcc8;
-  --color-fg: #161a20;
-  --color-fg-2: #2e3540;
-  --color-muted: #5d6675;
-  --color-dim: #7f8896;
-  --color-accent: #d18300;
-  --color-on-accent: #1a1206;
-  --color-ok: #1a9d5c;
-  --color-tx: #1f6fd1;
-  --color-warn: #b7791f;
-  --color-err: #d93636;
-  --color-sendbar: #f5f6f8;
-  --color-line-input: #d0d5dc;
+  --color-field: #ffffff;
+  --color-line: #e5e5e5;
+  --color-line-strong: #dcdcdc;
+  --color-line-focus: #b8b8b8;
+  --color-fg: #1a1a1a;
+  --color-fg-2: #3b3b3b;
+  --color-muted: #5f5f5f;
+  --color-dim: #767676;
+  --color-accent: #005fb8;
+  --color-on-accent: #ffffff;
+  --color-ok: #0f7b0f;
+  --color-tx: #005fb8;
+  --color-warn: #9d5d00;
+  --color-err: #c42b1c;
+  --color-sendbar: #fbfbfb;
+  --color-line-input: #d6d6d6;
   --color-seg-on: #ffffff;
-  --color-seg-on-fg: #161a20;
-  --color-toggle-on: #e8ebef;
-  --color-row-line: #eceef1;
-  --color-grid: #e8ebef;
-  --color-accent-soft: rgba(209, 131, 0, 0.12);
-  --color-ok-ring: rgba(26, 157, 92, 0.18);
-  --color-par: rgba(31, 111, 209, 0.08);
-  --color-shadow: rgba(20, 30, 50, 0.18);
+  --color-seg-on-fg: #1a1a1a;
+  --color-toggle-on: #e8eef7;
+  --color-row-line: #f0f0f0;
+  --color-grid: #ebebeb;
+  --color-accent-soft: rgba(0, 95, 184, 0.1);
+  --color-ok-ring: rgba(15, 123, 15, 0.16);
+  --color-par: rgba(0, 95, 184, 0.07);
+  --color-shadow: rgba(0, 0, 0, 0.12);
 }
 
 @layer base {
@@ -133,4 +144,86 @@
 }
 .u-select {
   background: rgba(108, 182, 255, 0.12);
+}
+
+/* Leaflet map: themed controls, dark tiles and the position marker. */
+.leaflet-container {
+  background: var(--color-bg);
+  font-family: var(--font-sans);
+}
+.map-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.5);
+}
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--color-panel);
+  color: var(--color-fg);
+  border-bottom-color: var(--color-line-strong);
+}
+.leaflet-bar {
+  border: 1px solid var(--color-line-strong) !important;
+  box-shadow: 0 4px 14px var(--color-shadow) !important;
+}
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--color-panel) 85%, transparent) !important;
+  color: var(--color-muted);
+}
+.leaflet-control-attribution a {
+  color: var(--color-tx);
+}
+.sondar-car {
+  background: none;
+  border: 0;
+}
+.sondar-car-body {
+  width: 34px;
+  height: 34px;
+  transition: transform 0.2s;
+}
+.sondar-car-halo {
+  fill: var(--color-accent-soft);
+}
+.sondar-car-arrow {
+  fill: var(--color-accent);
+  stroke: var(--color-panel);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.sondar-car.no-fix .sondar-car-halo {
+  fill: transparent;
+}
+.sondar-car.no-fix .sondar-car-arrow {
+  fill: var(--color-dim);
+}
+
+/* Start and end pins of a recorded route. */
+.sondar-pin {
+  background: none;
+  border: 0;
+}
+.sondar-pin-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid var(--color-panel);
+  box-shadow: 0 0 0 1px var(--color-line-focus);
+}
+.sondar-pin-start .sondar-pin-dot {
+  background: var(--color-ok);
+}
+.sondar-pin-end .sondar-pin-dot {
+  background: var(--color-err);
+}
+.sondar-pin-label {
+  position: absolute;
+  left: 18px;
+  top: -4px;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line-strong);
+  color: var(--color-fg);
+  font: 600 11px var(--font-sans);
+  box-shadow: 0 2px 8px var(--color-shadow);
 }
