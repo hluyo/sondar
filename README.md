@@ -20,7 +20,7 @@
 <p align="center">
   <img alt="Platform: Windows 10 and 11" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0067c0">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2ea44f">
-  <img alt="Status: early version" src="https://img.shields.io/badge/status-early%20version-f0a020">
+  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-f0a020">
 </p>
 
 <p align="center">
@@ -260,7 +260,7 @@ The **?** button opens this five-step guide at any time. You can also hover over
 
 ## Status
 
-Sondar is at an early stage and is tested on Windows 10 and 11 with ST Nucleo boards. The same code builds for macOS and Linux, but those builds are not tested yet. Bug reports and ideas are welcome in [Issues](../../issues).
+Sondar is in **beta** (version 0.x): it works and is used with real boards, but things may still change. It is tested on Windows 10 and 11 with ST Nucleo boards. See the [changelog](CHANGELOG.md) for what each version brings. The same code builds for macOS and Linux, but those builds are not tested yet. Bug reports and ideas are welcome in [Issues](../../issues).
 
 ## Development
 
