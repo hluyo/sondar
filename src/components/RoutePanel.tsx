@@ -513,7 +513,7 @@ export function RouteExport({
           </button>
         </div>
       )}
-      <span className="text-[11.5px] text-muted">{t("Saved in Documents\\Sonda Serial\\exports. The full TX/RX record is saved with “Save log” in the terminal.")}</span>
+      <span className="text-[11.5px] text-muted">{t("Saved in Documents\\Sondar\\exports. The full TX/RX record is saved with “Save log” in the terminal.")}</span>
     </div>
   );
 }

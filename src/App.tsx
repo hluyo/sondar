@@ -228,7 +228,7 @@ export default function App() {
           : status === "reconnecting"
             ? t("Waiting for the device…")
             : t("Disconnected");
-    const title = settings.port ? `Sonda Serial — ${settings.port} · ${state}` : `Sonda Serial — ${state}`;
+    const title = settings.port ? `Sondar — ${settings.port} · ${state}` : `Sondar — ${state}`;
     document.title = title;
     try {
       getCurrentWindow()
@@ -396,7 +396,7 @@ export default function App() {
     }
     const s = settingsRef.current;
     try {
-      const header = `Sonda Serial log · ${s.port || "no port"} · ${s.baudRate} ${frameLabel(s)} · ${new Date().toLocaleString()}`;
+      const header = `Sondar log · ${s.port || "no port"} · ${s.baudRate} ${frameLabel(s)} · ${new Date().toLocaleString()}`;
       const started = await SessionLog.start(s.port, header, (e) => {
         logRef.current = null;
         setLog(null);

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/** Subfolders of Documents/Sonda Serial. */
+/** Subfolders of Documents/Sondar. */
 export type FolderKind = "logs" | "exports";
 
 export const logStart = (name: string) => invoke<string>("log_start", { name });

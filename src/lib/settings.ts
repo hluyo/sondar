@@ -79,7 +79,7 @@ export const DEFAULT_SETTINGS: Settings = {
   routeFaults: DEFAULT_ROUTE_FAULTS,
 };
 
-const KEY = "sonda-serial.settings.v1";
+const KEY = "sondar.settings.v1";
 
 /** Forgets the saved settings, as on a fresh install. The caller reloads the app. */
 export function forgetSettings() {
