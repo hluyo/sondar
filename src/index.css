@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  --color-bg: #0a0c0f;
+  --color-panel: #0d1014;
+  --color-raised: #12161c;
+  --color-field: #141820;
+  --color-line: #1d222a;
+  --color-line-strong: #232933;
+  --color-line-focus: #363e4b;
+  --color-fg: #e7eaee;
+  --color-fg-2: #c9cfd8;
+  --color-muted: #9aa3b2;
+  --color-dim: #7a8392;
+  --color-accent: #ffb020;
+  --color-on-accent: #14110a;
+  --color-ok: #3dd68c;
+  --color-tx: #6cb6ff;
+  --color-warn: #f5c451;
+  --color-err: #ff7b7b;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color-scheme: dark;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+  input,
+  select,
+  textarea {
+    user-select: text;
+  }
+  option {
+    background: var(--color-field);
+    color: var(--color-fg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-tx);
+    outline-offset: 2px;
+  }
+}
+
+/* xterm.js: let the panel background show through and hide the inactive cursor. */
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+.xterm-viewport::-webkit-scrollbar,
+.scroll-thin::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.xterm-viewport::-webkit-scrollbar-thumb,
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #232933;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.xterm-viewport::-webkit-scrollbar-track,
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* uPlot: match the dark theme. */
+.uplot {
+  font-family: var(--font-mono);
+}
+.u-select {
+  background: rgba(108, 182, 255, 0.12);
+}

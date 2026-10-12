@@ -1,0 +1,210 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ConnectionBar, type ConnectionStatus } from "./components/ConnectionBar";
+import { PlotPanel } from "./components/PlotPanel";
+import { QuickCommands } from "./components/QuickCommands";
+import { TerminalPanel } from "./components/TerminalPanel";
+import { encodeCommand } from "./lib/encoding";
+import { PlotStore } from "./lib/plotStore";
+import { closePort, frameLabel, listPorts, openPort, type PortInfo, writePort } from "./lib/serial";
+import { toPortConfig, useSettings } from "./lib/settings";
+import { Emitter, formatBytes, type StreamEvent } from "./lib/stream";
+
+const RECONNECT_MS = 1000;
+const HISTORY_SIZE = 50;
+
+export default function App() {
+  const [settings, update] = useSettings();
+  const [ports, setPorts] = useState<PortInfo[]>([]);
+  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
+  const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  const [counters, setCounters] = useState({ rx: 0, tx: 0 });
+
+  const bus = useMemo(() => new Emitter<StreamEvent>(), []);
+  const plotStore = useMemo(() => new PlotStore(), []);
+  const countersRef = useRef({ rx: 0, tx: 0 });
+  const settingsRef = useRef(settings);
+  const statusRef = useRef(status);
+  /** Each open gets a new id so late events from a previous connection are ignored. */
+  const generation = useRef(0);
+
+  settingsRef.current = settings;
+  statusRef.current = status;
+
+  const info = useCallback((text: string) => bus.emit({ kind: "info", text, time: Date.now() }), [bus]);
+  const error = useCallback((text: string) => bus.emit({ kind: "error", text, time: Date.now() }), [bus]);
+
+  const refreshPorts = useCallback(async () => {
+    try {
+      setPorts(await listPorts());
+    } catch (e) {
+      error(`No se pudieron listar los puertos: ${e}`);
+    }
+  }, [error]);
+
+  useEffect(
+    () =>
+      bus.on((e) => {
+        if (e.kind === "rx") plotStore.pushBytes(e.bytes, e.time);
+      }),
+    [bus, plotStore],
+  );
+
+  // Keep the port list fresh while disconnected so plugging a board in shows up.
+  useEffect(() => {
+    refreshPorts();
+    if (status === "connected") return;
+    const id = setInterval(refreshPorts, 2000);
+    return () => clearInterval(id);
+  }, [status, refreshPorts]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const c = countersRef.current;
+      setCounters((prev) => (prev.rx === c.rx && prev.tx === c.tx ? prev : { ...c }));
+    }, 300);
+    return () => clearInterval(id);
+  }, []);
+
+  const connect = useCallback(async () => {
+    const s = settingsRef.current;
+    if (!s.port) {
+      error("Elige un puerto antes de conectar");
+      return;
+    }
+    const config = toPortConfig(s);
+    const id = ++generation.current;
+    const retrying = statusRef.current === "reconnecting";
+    if (!retrying) setStatus("connecting");
+
+    try {
+      await openPort(config, (event) => {
+        if (id !== generation.current) return;
+        if (event.kind === "data") {
+          const bytes = Uint8Array.from(event.bytes);
+          countersRef.current.rx += bytes.length;
+          bus.emit({ kind: "rx", bytes, time: Date.now() });
+        } else if (event.reason) {
+          // The port failed underneath us (cable pulled, board reset…).
+          generation.current++;
+          error(`Conexión perdida: ${event.reason}`);
+          if (settingsRef.current.autoReconnect) {
+            info(`Esperando a que vuelva ${config.port}…`);
+            setStatus("reconnecting");
+          } else {
+            setStatus("disconnected");
+          }
+        }
+      });
+      if (id !== generation.current) return;
+      setStatus("connected");
+      setConnectedAt(Date.now());
+      info(`${config.port} abierto · ${config.baudRate} ${frameLabel(config)}`);
+    } catch (e) {
+      if (id !== generation.current) return;
+      if (retrying) return; // keep waiting quietly
+      setStatus("disconnected");
+      error(String(e));
+    }
+  }, [bus, error, info]);
+
+  const disconnect = useCallback(async () => {
+    const wasConnected = statusRef.current === "connected";
+    generation.current++;
+    setStatus("disconnected");
+    try {
+      await closePort();
+    } finally {
+      info(wasConnected ? `${settingsRef.current.port} cerrado` : "Reconexión cancelada");
+    }
+  }, [info]);
+
+  // Auto-reconnect: retry once a second while the device is missing.
+  useEffect(() => {
+    if (status !== "reconnecting") return;
+    const id = setInterval(async () => {
+      const available = await listPorts().catch(() => []);
+      setPorts(available);
+      if (available.some((p) => p.name === settingsRef.current.port)) connect();
+    }, RECONNECT_MS);
+    return () => clearInterval(id);
+  }, [status, connect]);
+
+  const send = useCallback(
+    async (text: string) => {
+      const s = settingsRef.current;
+      update({ history: [...s.history.filter((h) => h !== text), text].slice(-HISTORY_SIZE) });
+      if (statusRef.current !== "connected") {
+        error(`No enviado (puerto cerrado): ${text}`);
+        return;
+      }
+      const bytes = encodeCommand(text, s.lineEnding);
+      try {
+        await writePort(bytes);
+        countersRef.current.tx += bytes.length;
+        bus.emit({ kind: "tx", text, bytes, ending: s.lineEnding, time: Date.now() });
+      } catch (e) {
+        error(`Error al enviar: ${e}`);
+      }
+    },
+    [bus, error, update],
+  );
+
+  // F1…F12 run the quick commands. Also stops F5 from reloading the window.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const m = /^F(\d{1,2})$/.exec(e.key);
+      if (!m) return;
+      e.preventDefault();
+      const cmd = settingsRef.current.quickCommands[Number(m[1]) - 1];
+      if (cmd?.command) send(cmd.command);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [send]);
+
+  const clearAll = useCallback(() => {
+    plotStore.clear();
+    countersRef.current = { rx: 0, tx: 0 };
+  }, [plotStore]);
+
+  return (
+    <div className="flex h-full flex-col">
+      <ConnectionBar
+        settings={settings}
+        update={update}
+        ports={ports}
+        onRefreshPorts={refreshPorts}
+        status={status}
+        connectedAt={connectedAt}
+        onToggleConnection={status === "disconnected" ? connect : disconnect}
+      />
+
+      <main className="flex min-h-0 flex-1 gap-3 p-3">
+        <QuickCommands
+          commands={settings.quickCommands}
+          onChange={(quickCommands) => update({ quickCommands })}
+          onRun={send}
+        />
+        <TerminalPanel bus={bus} settings={settings} update={update} onSend={send} onClear={clearAll} />
+        {settings.showPlot && (
+          <PlotPanel
+            store={plotStore}
+            windowSeconds={settings.plotWindow}
+            onWindowChange={(plotWindow) => update({ plotWindow })}
+          />
+        )}
+      </main>
+
+      <footer className="flex flex-wrap items-center gap-x-[18px] gap-y-1.5 border-t border-line bg-panel px-4 py-1.5 font-mono text-[11.5px] text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className={`size-1.5 rounded-full ${status === "connected" ? "bg-ok" : "bg-dim"}`} />
+          {settings.port || "—"} · {settings.baudRate} {frameLabel(settings)}
+        </span>
+        <span>RX {formatBytes(counters.rx)}</span>
+        <span>TX {formatBytes(counters.tx)}</span>
+        <span className="flex-1" />
+        <span>UTF-8</span>
+      </footer>
+    </div>
+  );
+}
