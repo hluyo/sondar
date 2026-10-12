@@ -1,6 +1,6 @@
 # Architecture
 
-Sonda Serial is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the serial port and a React + TypeScript frontend rendered by the system web view.
+Sondar is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the serial port and a React + TypeScript frontend rendered by the system web view.
 
 ```
 ┌──────────────── Rust (src-tauri) ────────────────┐      ┌────────────── Frontend (src) ──────────────┐
@@ -20,7 +20,7 @@ Sonda Serial is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns th
   - When the port fails (cable pulled, board reset), the thread sends `Closed { reason }`. A user-initiated close sends `Closed { reason: None }`.
   - Writes are queued to the same thread. On Windows the read and write timeouts are one setting shared by every handle of the port, so the thread raises the timeout for the length of each write (wire time ×2 plus 1 s) and puts the 10 ms read timeout back afterwards; otherwise a 500-byte burst (~45 ms at 115200 baud) would be cut and fail with "semaphore timeout" (os error 121). A cloned handle in `SerialState` is kept for the control lines.
 - `serial.rs` also asserts DTR and RTS on open (RTS is left to the driver with hardware flow control) and, from the reader thread, checks the input lines (CTS, DSR, CD, RI) every 100 ms, sending `Signals` only when they change.
-- `files.rs`: session log (`log_start` / `log_write` / `log_stop`), plot exports (`save_export`) and `open_folder`. Files go under `Documents/Sonda Serial/{logs,exports}`.
+- `files.rs`: session log (`log_start` / `log_write` / `log_stop`), plot exports (`save_export`) and `open_folder`. Files go under `Documents/Sondar/{logs,exports}`.
 - `lib.rs`: registers the commands and the shared state.
 
 ## Frontend (`src`)

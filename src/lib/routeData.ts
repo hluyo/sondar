@@ -36,7 +36,7 @@ export interface RouteData {
 const STEP_FILE = /(?:^|[\\/])(nmea_\d+\.txt)$/i;
 const CSV_FILE = /(?:^|[\\/])ruta_referencia\.csv$/i;
 const README_FILE = /(?:^|[\\/])(leeme|readme)\.txt$/i;
-const STORAGE_KEY = "sonda-serial.route.v1";
+const STORAGE_KEY = "sondar.route.v1";
 
 /** name (as in the CSV) → text. Paths are reduced to the file name. */
 type FileMap = Map<string, string>;

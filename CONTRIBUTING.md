@@ -1,4 +1,4 @@
-# Contributing to Sonda Serial
+# Contributing to Sondar
 
 Thanks for your interest! Bug reports, ideas and pull requests are welcome.
 

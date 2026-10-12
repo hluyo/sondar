@@ -271,8 +271,8 @@ export const ES: Record<string, string> = {
   "Terminal: show only $GPGGA of each frame (the whole frame is still sent)": "Terminal: mostrar solo $GPGGA de cada trama (se sigue enviando entera)",
   "Received route (CSV)": "Ruta recibida (CSV)",
   "Received route (GPX)": "Ruta recibida (GPX)",
-  "Saved in Documents\\Sonda Serial\\exports. The full TX/RX record is saved with “Save log” in the terminal.":
-    "Se guarda en Documentos\\Sonda Serial\\exports. El registro completo de TX/RX se guarda con «Guardar log» en la terminal.",
+  "Saved in Documents\\Sondar\\exports. The full TX/RX record is saved with “Save log” in the terminal.":
+    "Se guarda en Documentos\\Sondar\\exports. El registro completo de TX/RX se guarda con «Guardar log» en la terminal.",
   "Drag to resize the side panel": "Arrastra para cambiar el ancho del panel",
   Tools: "Herramientas",
 

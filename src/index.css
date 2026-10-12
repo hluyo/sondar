@@ -171,50 +171,50 @@
 .leaflet-control-attribution a {
   color: var(--color-tx);
 }
-.sonda-car {
+.sondar-car {
   background: none;
   border: 0;
 }
-.sonda-car-body {
+.sondar-car-body {
   width: 34px;
   height: 34px;
   transition: transform 0.2s;
 }
-.sonda-car-halo {
+.sondar-car-halo {
   fill: var(--color-accent-soft);
 }
-.sonda-car-arrow {
+.sondar-car-arrow {
   fill: var(--color-accent);
   stroke: var(--color-panel);
   stroke-width: 2;
   stroke-linejoin: round;
 }
-.sonda-car.no-fix .sonda-car-halo {
+.sondar-car.no-fix .sondar-car-halo {
   fill: transparent;
 }
-.sonda-car.no-fix .sonda-car-arrow {
+.sondar-car.no-fix .sondar-car-arrow {
   fill: var(--color-dim);
 }
 
 /* Start and end pins of a recorded route. */
-.sonda-pin {
+.sondar-pin {
   background: none;
   border: 0;
 }
-.sonda-pin-dot {
+.sondar-pin-dot {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   border: 3px solid var(--color-panel);
   box-shadow: 0 0 0 1px var(--color-line-focus);
 }
-.sonda-pin-start .sonda-pin-dot {
+.sondar-pin-start .sondar-pin-dot {
   background: var(--color-ok);
 }
-.sonda-pin-end .sonda-pin-dot {
+.sondar-pin-end .sondar-pin-dot {
   background: var(--color-err);
 }
-.sonda-pin-label {
+.sondar-pin-label {
   position: absolute;
   left: 18px;
   top: -4px;

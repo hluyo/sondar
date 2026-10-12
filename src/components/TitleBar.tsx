@@ -39,7 +39,7 @@ export function TitleBar({ subtitle }: { subtitle: string }) {
     <div data-tauri-drag-region className="flex h-9 shrink-0 items-center bg-bg pl-3 select-none">
       <AppLogo size={16} />
       <span data-tauri-drag-region className="ml-2.5 text-xs text-fg">
-        Sonda Serial
+        Sondar
       </span>
       <span data-tauri-drag-region className="ml-3 truncate text-xs text-muted">
         {subtitle}

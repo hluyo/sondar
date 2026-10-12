@@ -28,20 +28,20 @@ const START_ZOOM = 18;
 const MISMATCH_METERS = 25;
 
 const carIcon = L.divIcon({
-  className: "sonda-car",
+  className: "sondar-car",
   iconSize: [34, 34],
   iconAnchor: [17, 17],
-  html: '<div class="sonda-car-body"><svg viewBox="-17 -17 34 34" width="34" height="34" aria-hidden="true"><circle r="16" class="sonda-car-halo"/><path d="M0,-11 L8,9 L0,4.5 L-8,9 Z" class="sonda-car-arrow"/></svg></div>',
+  html: '<div class="sondar-car-body"><svg viewBox="-17 -17 34 34" width="34" height="34" aria-hidden="true"><circle r="16" class="sondar-car-halo"/><path d="M0,-11 L8,9 L0,4.5 L-8,9 Z" class="sondar-car-arrow"/></svg></div>',
 });
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 function pinIcon(label: string, kind: "start" | "end") {
   return L.divIcon({
-    className: `sonda-pin sonda-pin-${kind}`,
+    className: `sondar-pin sondar-pin-${kind}`,
     iconSize: [14, 14],
     iconAnchor: [7, 7],
-    html: `<span class="sonda-pin-dot"></span><span class="sonda-pin-label">${escapeHtml(label)}</span>`,
+    html: `<span class="sondar-pin-dot"></span><span class="sondar-pin-label">${escapeHtml(label)}</span>`,
   });
 }
 
@@ -179,7 +179,7 @@ export function MapPanel({ tracker, simulator, player, theme, visible, source }:
           const t = tracker.trail;
           for (let i = t.length - 2; i >= 0; i--) {
             if (t[i].lat !== t[t.length - 1].lat || t[i].lon !== t[t.length - 1].lon) {
-              const body = el?.querySelector<HTMLElement>(".sonda-car-body");
+              const body = el?.querySelector<HTMLElement>(".sondar-car-body");
               if (body) body.style.transform = `rotate(${headingBetween(t[i], t[t.length - 1])}deg)`;
               break;
             }

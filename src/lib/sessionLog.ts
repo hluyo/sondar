@@ -32,7 +32,7 @@ export class SessionLog {
     this.timer = window.setInterval(() => this.flush(), FLUSH_MS);
   }
 
-  /** Creates the file in Documents/Sonda Serial/logs. */
+  /** Creates the file in Documents/Sondar/logs. */
   static async start(port: string, header: string, onError: (error: unknown) => void) {
     const log = new SessionLog(await logStart(`${fileStamp()}_${port || "no-port"}.txt`), onError);
     log.buffer = `# ${header}\n`;

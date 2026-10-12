@@ -2902,7 +2902,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sonda-serial"
+name = "sondar"
 version = "0.1.0"
 dependencies = [
  "serde",

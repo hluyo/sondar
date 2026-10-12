@@ -1,6 +1,6 @@
 //! Files written by the app: session logs and plot exports.
 //!
-//! Everything goes under `Documents/Sonda Serial/<kind>/`, so the user always knows
+//! Everything goes under `Documents/Sondar/<kind>/`, so the user always knows
 //! where to look and no save dialog is needed.
 
 use std::fs::{self, File};
@@ -10,12 +10,12 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, Manager, State};
 
-const APP_FOLDER: &str = "Sonda Serial";
+const APP_FOLDER: &str = "Sondar";
 
 #[derive(Default)]
 pub struct LogState(Mutex<Option<BufWriter<File>>>);
 
-/// `Documents/Sonda Serial/<kind>`, created if missing. `kind` is "logs" or "exports".
+/// `Documents/Sondar/<kind>`, created if missing. `kind` is "logs" or "exports".
 fn folder(app: &AppHandle, kind: &str) -> Result<PathBuf, String> {
     if kind != "logs" && kind != "exports" {
         return Err(format!("Unknown folder: {kind}"));

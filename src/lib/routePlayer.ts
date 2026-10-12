@@ -453,7 +453,7 @@ export function resultsGpx(route: RouteData, results: BurstResult[]) {
       return `      <trkpt lat="${p!.lat!.toFixed(6)}" lon="${p!.lon!.toFixed(6)}">${time}\n      </trkpt>`;
     });
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Sonda Serial" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Sondar" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
     <name>${xml(`${route.startLabel} → ${route.endLabel} (device)`)}</name>
     <trkseg>
