@@ -134,3 +134,85 @@
 .u-select {
   background: rgba(108, 182, 255, 0.12);
 }
+
+/* Leaflet map: themed controls, dark tiles and the position marker. */
+.leaflet-container {
+  background: var(--color-bg);
+  font-family: var(--font-sans);
+}
+.map-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.5);
+}
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--color-panel);
+  color: var(--color-fg);
+  border-bottom-color: var(--color-line-strong);
+}
+.leaflet-bar {
+  border: 1px solid var(--color-line-strong) !important;
+  box-shadow: 0 4px 14px var(--color-shadow) !important;
+}
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--color-panel) 85%, transparent) !important;
+  color: var(--color-muted);
+}
+.leaflet-control-attribution a {
+  color: var(--color-tx);
+}
+.sonda-car {
+  background: none;
+  border: 0;
+}
+.sonda-car-body {
+  width: 34px;
+  height: 34px;
+  transition: transform 0.2s;
+}
+.sonda-car-halo {
+  fill: var(--color-accent-soft);
+}
+.sonda-car-arrow {
+  fill: var(--color-accent);
+  stroke: var(--color-panel);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.sonda-car.no-fix .sonda-car-halo {
+  fill: transparent;
+}
+.sonda-car.no-fix .sonda-car-arrow {
+  fill: var(--color-dim);
+}
+
+/* Start and end pins of a recorded route. */
+.sonda-pin {
+  background: none;
+  border: 0;
+}
+.sonda-pin-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid var(--color-panel);
+  box-shadow: 0 0 0 1px var(--color-line-focus);
+}
+.sonda-pin-start .sonda-pin-dot {
+  background: var(--color-ok);
+}
+.sonda-pin-end .sonda-pin-dot {
+  background: var(--color-err);
+}
+.sonda-pin-label {
+  position: absolute;
+  left: 18px;
+  top: -4px;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line-strong);
+  color: var(--color-fg);
+  font: 600 11px var(--font-sans);
+  box-shadow: 0 2px 8px var(--color-shadow);
+}

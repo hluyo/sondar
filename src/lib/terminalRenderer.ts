@@ -11,6 +11,7 @@ const DIM = "\x1b[90m";
 const TX = "\x1b[34m";
 const INFO = "\x1b[37m";
 const ERROR = "\x1b[31m";
+const WARN = "\x1b[33m";
 
 const BASE = { background: "#00000000", cursor: "#00000000", cursorAccent: "#00000000" };
 
@@ -187,7 +188,8 @@ export class TerminalRenderer {
         if (!this.echo) return "";
         const ending = LINE_ENDINGS.find((e) => e.id === event.ending)?.escaped ?? "";
         const body = this.mode === "hex" ? toHex(event.bytes) : `${event.text}${DIM}  ${ending}`;
-        return `${this.breakLine()}${this.prefix(event.time)}${TX}${body}${RESET}\n`;
+        const note = event.note ? `${WARN}  « ${event.note}` : "";
+        return `${this.breakLine()}${this.prefix(event.time)}${TX}${body}${note}${RESET}\n`;
       }
       case "info":
         return `${this.breakLine()}${this.prefix(event.time)}${INFO}── ${event.text} ──${RESET}\n`;

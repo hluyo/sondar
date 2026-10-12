@@ -266,7 +266,7 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
   const hideAll = () => applyHidden(Object.fromEntries(store.names.map((n) => [n, true])));
 
   return (
-    <section aria-label="Live plot" className="flex min-h-0 w-[min(40%,560px)] min-w-[360px] shrink-0 flex-col gap-3 rounded-xl border border-line bg-panel px-4 py-3.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-2.5">
         <div className="flex flex-1 flex-col gap-0.5">
           <h2 className="m-0 text-[15px] font-semibold">Live plot</h2>
@@ -407,7 +407,7 @@ export function PlotPanel({ store, theme, windowSeconds, onWindowChange, yAxis, 
           </tbody>
         </table>
       )}
-    </section>
+    </div>
   );
 }
 

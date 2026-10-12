@@ -54,7 +54,7 @@ export class SessionLog {
         break;
       }
       case "tx":
-        this.line(event.time, "TX", event.text);
+        this.line(event.time, "TX", event.note ? `${event.text}  « ${event.note}` : event.text);
         break;
       case "info":
         this.line(event.time, "--", event.text);
