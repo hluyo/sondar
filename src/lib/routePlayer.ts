@@ -1,4 +1,5 @@
 import { burstLines, corruptGgaChecksum, dropGgaBytes, noFixBurst, type RouteData, type RouteStep } from "./routeData";
+import { t } from "./i18n";
 import { Emitter } from "./stream";
 
 /** How long a burst waits for its answer. */
@@ -148,7 +149,7 @@ export class RoutePlayer {
     if (!this.route || this.playing) return;
     if (this.finished) this.reset();
     this.playing = true;
-    this.hooks.report("info", `Route ${this.route.name}: playing from burst ${this.position + 1} at ×${this.speed}`);
+    this.hooks.report("info", t("Route {name}: playing from frame {n} at {speed}×", { name: this.route.name, n: this.position + 1, speed: this.speed }));
     this.changes.emit();
     this.tick();
   }
@@ -233,7 +234,7 @@ export class RoutePlayer {
   private onLine(text: string) {
     const response = parseResponse(text);
     if (!response) return;
-    if (response.kind === "format") this.hooks.report("error", `Format error: "${text}" is not POS,<lat>,<lon>`);
+    if (response.kind === "format") this.hooks.report("error", t("Format error: \"{text}\" is not POS,<lat>,<lon>", { text }));
     const result = this.lastResult;
     if (!result) return;
     result.responses.push(response);
@@ -264,7 +265,7 @@ export class RoutePlayer {
     if (this.position >= route.steps.length) {
       if (!this.loop) return false;
       this.closeWindow();
-      this.hooks.report("info", `Route finished: ${this.summaryText()}. Starting again`);
+      this.hooks.report("info", t("Route finished: {summary}. Starting again", { summary: this.summaryText() }));
       this.position = 0;
       this.results = [];
       this.hooks.onRestart();
@@ -279,7 +280,7 @@ export class RoutePlayer {
         text,
         bytes: ascii.encode(`${text}\r\n`),
         isGga: gga,
-        note: gga && injected ? `injected: ${INJECTED_LABELS[injected]}` : undefined,
+        note: gga && injected ? `${t("simulated error")}: ${t(INJECTED_LABELS[injected])}` : undefined,
       };
     });
 
@@ -304,7 +305,7 @@ export class RoutePlayer {
       await this.hooks.send(Uint8Array.from(burst, (c) => c.charCodeAt(0) & 0xff), lineObjects);
     } catch (e) {
       this.pause();
-      this.hooks.report("error", `Route paused: could not send burst ${step.index} (${e})`);
+      this.hooks.report("error", t("Route paused: could not send frame {n} ({e})", { n: step.index, e: String(e) }));
       return false;
     }
 
@@ -315,7 +316,7 @@ export class RoutePlayer {
       window.setTimeout(() => {
         this.closeWindow();
         this.finished = true;
-        this.hooks.report("info", `Route finished: ${this.summaryText()}`);
+        this.hooks.report("info", t("Route finished: {summary}", { summary: this.summaryText() }));
         this.changes.emit();
       }, RESPONSE_WINDOW_MS);
     }
@@ -387,25 +388,25 @@ export class RoutePlayer {
 
   /** Only failures go to the terminal; the panel shows every burst. */
   private reportResult(r: BurstResult) {
-    const id = `Burst ${r.step.index} (${r.step.utc})`;
+    const id = t("Frame {n} ({utc})", { n: r.step.index, utc: r.step.utc });
     const got = r.responses.map((x) => x.text).join(" | ");
-    if (r.verdict === "noResponse") this.hooks.report("error", `${id}: no response in ${RESPONSE_WINDOW_MS} ms, expected ${r.expected}`);
-    else if (r.verdict === "duplicate") this.hooks.report("error", `${id}: duplicate response (${got})`);
+    if (r.verdict === "noResponse") this.hooks.report("error", `${id}: ${t("no response in {ms} ms, expected {exp}", { ms: RESPONSE_WINDOW_MS, exp: r.expected ?? "" })}`);
+    else if (r.verdict === "duplicate") this.hooks.report("error", `${id}: ${t("duplicate response ({got})", { got })}`);
     else if (r.verdict === "wrong")
       this.hooks.report(
         "error",
-        `${id}: expected ${r.expected ?? "no response"}, got ${got}${r.errorMeters !== null ? ` (${formatDistance(r.errorMeters)} away)` : ""}`,
+        `${id}: ${t("expected {exp}, got {got}", { exp: r.expected ?? t("no response"), got })}${r.errorMeters !== null ? ` (${t("{d} away", { d: formatDistance(r.errorMeters) })})` : ""}`,
       );
   }
 
   private summaryText() {
     const s = this.summary();
-    return `${s.correct}/${s.sent} correct, ${s.wrong} wrong, ${s.noResponse} without response, ${s.duplicate} duplicate · grade ${s.grade.toFixed(1)}`;
+    return t("{correct}/{sent} correct, {wrong} wrong, {none} without response, {dup} duplicate · grade {grade}", { correct: s.correct, sent: s.sent, wrong: s.wrong, none: s.noResponse, dup: s.duplicate, grade: s.grade.toFixed(1) });
   }
 }
 
 export const INJECTED_LABELS: Record<InjectedFault, string> = {
-  checksum: "bad GGA checksum",
+  checksum: "altered GGA checksum",
   bytesLost: "bytes lost in GGA",
   signalLoss: "signal loss",
 };

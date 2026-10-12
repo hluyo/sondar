@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ConnectionBar, type ConnectionStatus } from "./components/ConnectionBar";
-import { MapPanel } from "./components/MapPanel";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ConnectionBar, type ConnectionStatus, isStBoard } from "./components/ConnectionBar";
+import { GpsPanel } from "./components/GpsPanel";
+import { HelpDialog } from "./components/HelpDialog";
+import { TitleBar } from "./components/TitleBar";
 import { PlotPanel } from "./components/PlotPanel";
-import { QuickCommands } from "./components/QuickCommands";
-import { RoutePanel } from "./components/RoutePanel";
 import { SidePanel } from "./components/SidePanel";
-import { SimulatorPanel } from "./components/SimulatorPanel";
-import { SimulatorTab } from "./components/SimulatorTab";
-import { TerminalPanel } from "./components/TerminalPanel";
+import { ReceivePanel, SendPanel } from "./components/TerminalPanel";
 import { encodeCommand } from "./lib/encoding";
 import { fileStamp, openFolder, saveExport } from "./lib/files";
 import { FAULT_LABELS, type GpsConfig, GpsSimulator } from "./lib/gpsSimulator";
+import { resolveLanguage, setLanguage, t } from "./lib/i18n";
 import { PlotStore } from "./lib/plotStore";
 import { PositionTracker } from "./lib/positionTracker";
 import { loadSavedRoute, type RouteData, saveRoute } from "./lib/routeData";
@@ -27,7 +27,7 @@ import {
   writePort,
 } from "./lib/serial";
 import { SessionLog } from "./lib/sessionLog";
-import { toPortConfig, useSettings } from "./lib/settings";
+import { forgetSettings, toPortConfig, useSettings } from "./lib/settings";
 import { useTheme } from "./lib/theme";
 import { Emitter, formatBytes, type StreamEvent } from "./lib/stream";
 
@@ -37,7 +37,12 @@ const OUTPUTS_ON_OPEN: OutputLines = { dtr: true, rts: true };
 
 export default function App() {
   const [settings, update] = useSettings();
+  // Set before any child renders, so every t() call below uses it.
+  const language = resolveLanguage(settings.language);
+  setLanguage(language);
   const theme = useTheme(settings.theme);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(settings.sidePanelWidth);
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
@@ -63,7 +68,7 @@ export default function App() {
   const player = useMemo(() => {
     const p = new RoutePlayer({
       send: async (bytes, lines) => {
-        if (statusRef.current !== "connected") throw new Error("the port is closed");
+        if (statusRef.current !== "connected") throw new Error(t("the port is closed"));
         await writePort(bytes);
         countersRef.current.tx += bytes.length;
         const onlyGga = settingsRef.current.routeTxOnlyGga;
@@ -90,7 +95,7 @@ export default function App() {
     try {
       setPorts(await listPorts());
     } catch (e) {
-      error(`Could not list ports: ${e}`);
+      error(t("Could not list ports: {e}", { e: String(e) }));
     }
   }, [error]);
 
@@ -125,12 +130,12 @@ export default function App() {
             bytes: frame.bytes,
             ending: "crlf",
             time: frame.time,
-            note: fault ? `injected: ${FAULT_LABELS[fault]}` : undefined,
+            note: fault ? `${t("simulated error")}: ${t(FAULT_LABELS[fault])}` : undefined,
           });
         })
         .catch((e) => {
           sim.stop();
-          error(`Simulator stopped, send failed: ${e}`);
+          error(t("Simulator stopped, send failed: {e}", { e: String(e) }));
         });
     });
     return sim;
@@ -170,19 +175,35 @@ export default function App() {
     (route: RouteData) => {
       player.setRoute(route);
       saveRoute(route);
-      info(`Route loaded: ${route.name} · ${route.steps.length} bursts · ${route.startLabel} → ${route.endLabel}`);
+      info(t("Route loaded: {name} · {n} frames · {start} → {end}", { name: route.name, n: route.steps.length, start: route.startLabel, end: route.endLabel }));
     },
     [player, info],
   );
+
+  const removeRoute = useCallback(() => {
+    player.setRoute(null);
+    saveRoute(null);
+    info(t("Route removed"));
+  }, [player, info]);
+
+  /** Back to a fresh install: close the port, forget everything and reload. */
+  const resetAll = useCallback(async () => {
+    simulator.stop();
+    player.pause();
+    if (statusRef.current !== "disconnected") await closePort().catch(() => {});
+    saveRoute(null);
+    forgetSettings();
+    window.location.reload();
+  }, [simulator, player]);
 
   const exportFile = useCallback(
     async (name: string, contents: string) => {
       try {
         const path = await saveExport(name, contents);
-        info(`Exported: ${path}`);
+        info(t("Exported: {path}", { path }));
         return path;
       } catch (e) {
-        error(`Could not export: ${e}`);
+        error(t("Could not export: {e}", { e: String(e) }));
         return null;
       }
     },
@@ -196,6 +217,35 @@ export default function App() {
     },
     [update, simulator],
   );
+
+  // The app name lives only in the window title, with the connection state.
+  useEffect(() => {
+    const state =
+      status === "connected"
+        ? t("Connected")
+        : status === "connecting"
+          ? t("Connecting…")
+          : status === "reconnecting"
+            ? t("Waiting for the device…")
+            : t("Disconnected");
+    const title = settings.port ? `Sonda Serial — ${settings.port} · ${state}` : `Sonda Serial — ${state}`;
+    document.title = title;
+    try {
+      getCurrentWindow()
+        .setTitle(title)
+        .catch(() => {});
+    } catch {
+      // Outside the desktop app (plain browser preview) there is no native window.
+    }
+  }, [status, settings.port, language]);
+
+  // First run: pick the port by itself when the choice is obvious (an ST board, or the only port).
+  useEffect(() => {
+    if (settingsRef.current.port || ports.length === 0) return;
+    const st = ports.filter(isStBoard);
+    const pick = st.length === 1 ? st[0] : ports.length === 1 ? ports[0] : null;
+    if (pick) update({ port: pick.name });
+  }, [ports, update]);
 
   // Keep the port list fresh while disconnected so plugging a board in shows up.
   useEffect(() => {
@@ -218,7 +268,7 @@ export default function App() {
   const connect = useCallback(async () => {
     const s = settingsRef.current;
     if (!s.port) {
-      error("Choose a port before connecting");
+      error(t("Choose a port before connecting"));
       return;
     }
     const config = toPortConfig(s);
@@ -240,9 +290,9 @@ export default function App() {
           // The port failed underneath us (cable pulled, board reset…).
           generation.current++;
           setInputs(null);
-          error(`Connection lost: ${event.reason}`);
+          error(t("Connection lost: {reason}", { reason: event.reason }));
           if (settingsRef.current.autoReconnect) {
-            info(`Waiting for ${config.port} to come back…`);
+            info(t("Waiting for {port} to come back…", { port: config.port }));
             setStatus("reconnecting");
           } else {
             setStatus("disconnected");
@@ -253,7 +303,7 @@ export default function App() {
       setStatus("connected");
       setConnectedAt(Date.now());
       setOutputs({ dtr: true, rts: config.flowControl !== "hardware" });
-      info(`${config.port} opened · ${config.baudRate} ${frameLabel(config)}`);
+      info(t("{port} opened · {baud} {frame}", { port: config.port, baud: config.baudRate, frame: frameLabel(config) }));
     } catch (e) {
       if (id !== generation.current) return;
       if (retrying) return; // keep waiting quietly
@@ -270,7 +320,7 @@ export default function App() {
     try {
       await closePort();
     } finally {
-      info(wasConnected ? `${settingsRef.current.port} closed` : "Reconnect cancelled");
+      info(wasConnected ? t("{port} closed", { port: settingsRef.current.port }) : t("Reconnect cancelled"));
     }
   }, [info]);
 
@@ -290,7 +340,7 @@ export default function App() {
       const s = settingsRef.current;
       update({ history: [...s.history.filter((h) => h !== text), text].slice(-HISTORY_SIZE) });
       if (statusRef.current !== "connected") {
-        error(`Not sent (port closed): ${text}`);
+        error(t("Not sent (port closed): {text}", { text }));
         return;
       }
       const bytes = encodeCommand(text, s.lineEnding);
@@ -299,7 +349,7 @@ export default function App() {
         countersRef.current.tx += bytes.length;
         bus.emit({ kind: "tx", text, bytes, ending: s.lineEnding, time: Date.now() });
       } catch (e) {
-        error(`Send failed: ${e}`);
+        error(t("Send failed: {e}", { e: String(e) }));
       }
     },
     [bus, error, update],
@@ -323,9 +373,9 @@ export default function App() {
       try {
         await setSignals({ [line]: value });
         setOutputs((o) => ({ ...o, [line]: value }));
-        info(`${line.toUpperCase()} ${value ? "on" : "off"}`);
+        info(`${line.toUpperCase()} ${value ? t("on") : t("off")}`);
       } catch (e) {
-        error(`Could not set ${line.toUpperCase()}: ${e}`);
+        error(t("Could not set {line}: {e}", { line: line.toUpperCase(), e: String(e) }));
       }
     },
     [info, error],
@@ -338,9 +388,9 @@ export default function App() {
       setLog(null);
       try {
         await current.stop();
-        info(`Log saved: ${current.path}`);
+        info(t("Log saved: {path}", { path: current.path }));
       } catch (e) {
-        error(`Could not close the log: ${e}`);
+        error(t("Could not close the log: {e}", { e: String(e) }));
       }
       return;
     }
@@ -350,28 +400,28 @@ export default function App() {
       const started = await SessionLog.start(s.port, header, (e) => {
         logRef.current = null;
         setLog(null);
-        error(`Logging stopped: ${e}`);
+        error(t("Logging stopped: {e}", { e: String(e) }));
       });
       logRef.current = started;
       setLog({ path: started.path, bytes: 0 });
-      info(`Logging to ${started.path}`);
+      info(t("Saving the log to {path}", { path: started.path }));
     } catch (e) {
-      error(`Could not start the log: ${e}`);
+      error(t("Could not start the log: {e}", { e: String(e) }));
     }
   }, [info, error]);
 
   const showFolder = useCallback(
-    (kind: "logs" | "exports") => openFolder(kind).catch((e) => error(`Could not open the folder: ${e}`)),
+    (kind: "logs" | "exports") => openFolder(kind).catch((e) => error(t("Could not open the folder: {e}", { e: String(e) }))),
     [error],
   );
 
   const exportPlot = useCallback(async () => {
     try {
       const path = await saveExport(`${fileStamp()}_plot.csv`, plotStore.toCSV());
-      info(`Plot exported: ${path}`);
+      info(t("Plot exported: {path}", { path }));
       return path;
     } catch (e) {
-      error(`Could not export the plot: ${e}`);
+      error(t("Could not export the plot: {e}", { e: String(e) }));
       return null;
     }
   }, [plotStore, info, error]);
@@ -385,6 +435,14 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
+      <TitleBar
+        subtitle={[
+          settings.port,
+          status === "connected" ? t("Connected") : status === "connecting" ? t("Connecting…") : status === "reconnecting" ? t("Waiting for the device…") : t("Disconnected"),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      />
       <ConnectionBar
         settings={settings}
         update={update}
@@ -395,33 +453,43 @@ export default function App() {
         onToggleConnection={status === "disconnected" ? connect : disconnect}
         theme={theme}
         onToggleTheme={() => update({ theme: theme === "dark" ? "light" : "dark" })}
+        language={language}
+        onOpenHelp={() => setHelpOpen(true)}
         outputs={outputs}
         inputs={inputs}
         onSetOutput={setOutput}
+        onResetAll={resetAll}
       />
 
-      <main className="flex min-h-0 flex-1 gap-3 p-3">
-        <QuickCommands
-          commands={settings.quickCommands}
-          onChange={(quickCommands) => update({ quickCommands })}
-          onRun={send}
-        />
-        <TerminalPanel
-          bus={bus}
-          theme={theme}
-          settings={settings}
-          update={update}
-          onSend={send}
-          onClear={clearAll}
-          log={log}
-          onToggleLog={toggleLog}
-          onOpenLogFolder={() => showFolder("logs")}
-        />
+      <main className="flex min-h-0 flex-1 p-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <ReceivePanel
+            bus={bus}
+            theme={theme}
+            settings={settings}
+            update={update}
+            onClear={clearAll}
+            log={log}
+            onToggleLog={toggleLog}
+            onOpenLogFolder={() => showFolder("logs")}
+            counters={counters}
+            status={status}
+            onConnect={connect}
+          />
+          <SendPanel settings={settings} update={update} onSend={send} />
+        </div>
         {settings.showPlot && (
           <SidePanel
             tab={settings.sideTab}
             onTabChange={(sideTab) => update({ sideTab })}
-            badges={{ simulator: simulatorRunning ? `GGA ${settings.gps.rate} Hz` : playerState.playing ? `route ×${settings.routeSpeed}` : undefined }}
+            width={panelWidth}
+            onWidthChange={(w, done) => {
+              setPanelWidth(w);
+              if (done) update({ sidePanelWidth: w });
+            }}
+            badges={{
+              gps: playerState.playing ? `${playerState.position}/${playerState.total}` : simulatorRunning ? `GGA ${settings.gps.rate} Hz` : undefined,
+            }}
             panels={{
               plot: (
                 <PlotPanel
@@ -441,34 +509,21 @@ export default function App() {
                   }
                 />
               ),
-              map: <MapPanel tracker={tracker} simulator={simulator} player={player} theme={theme} visible={settings.sideTab === "map"} />,
-              simulator: (
-                <SimulatorTab
-                  source={settings.simSource}
-                  onSourceChange={(simSource) => update({ simSource })}
-                  route={
-                    <RoutePanel
-                      player={player}
-                      tracker={tracker}
-                      connected={status === "connected"}
-                      speed={settings.routeSpeed}
-                      loop={settings.routeLoop}
-                      txOnlyGga={settings.routeTxOnlyGga}
-                      faults={settings.routeFaults}
-                      onChange={(patch) => {
-                        update(patch);
-                        if (patch.routeSpeed !== undefined) player.setSpeed(patch.routeSpeed);
-                        if (patch.routeLoop !== undefined) player.setLoop(patch.routeLoop);
-                        if (patch.routeFaults !== undefined) player.setFaults(patch.routeFaults);
-                      }}
-                      onRouteLoaded={loadRoute}
-                      onExport={exportFile}
-                      onOpenExportFolder={() => showFolder("exports")}
-                    />
-                  }
-                  synthetic={
-                    <SimulatorPanel simulator={simulator} config={settings.gps} onConfigChange={setGps} connected={status === "connected"} />
-                  }
+              gps: (
+                <GpsPanel
+                  tracker={tracker}
+                  simulator={simulator}
+                  player={player}
+                  theme={theme}
+                  visible={settings.sideTab === "gps"}
+                  connected={status === "connected"}
+                  settings={settings}
+                  update={update}
+                  onGpsConfig={setGps}
+                  onRouteLoaded={loadRoute}
+                  onRouteRemoved={removeRoute}
+                  onExport={exportFile}
+                  onOpenExportFolder={() => showFolder("exports")}
                 />
               ),
             }}
@@ -476,10 +531,10 @@ export default function App() {
         )}
       </main>
 
-      <footer className="flex flex-wrap items-center gap-x-[18px] gap-y-1.5 border-t border-line bg-panel px-4 py-1.5 font-mono text-[11.5px] text-muted">
+      <footer className="flex flex-wrap items-center gap-x-[18px] gap-y-1.5 bg-bg px-4 pt-0.5 pb-2 text-xs text-muted">
         <span className="inline-flex items-center gap-1.5">
           <span className={`size-1.5 rounded-full ${status === "connected" ? "bg-ok" : "bg-dim"}`} />
-          {settings.port || "—"} · {settings.baudRate} {frameLabel(settings)}
+          {settings.port || "—"} · {settings.baudRate} {frameLabel(settings)} · {status === "connected" ? t("Connected") : t("Disconnected")}
         </span>
         <span>RX {formatBytes(counters.rx)}</span>
         <span>TX {formatBytes(counters.tx)}</span>
@@ -492,18 +547,19 @@ export default function App() {
         {playerState.playing && (
           <span className="inline-flex items-center gap-1.5 text-accent">
             <span className="size-1.5 rounded-full bg-accent" />
-            ROUTE {playerState.position}/{playerState.total} ×{settings.routeSpeed}
+            {t("ROUTE")} {playerState.position}/{playerState.total} · {settings.routeSpeed}×
           </span>
         )}
         {simulatorRunning && (
           <span className="inline-flex items-center gap-1.5 text-accent">
             <span className="size-1.5 rounded-full bg-accent" />
-            SIM GPS {settings.gps.talker}GGA {settings.gps.rate} Hz
+            {t("SYNTHETIC GPS")} {settings.gps.talker}GGA {settings.gps.rate} Hz
           </span>
         )}
         <span className="flex-1" />
         <span>UTF-8</span>
       </footer>
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

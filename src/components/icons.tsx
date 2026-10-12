@@ -10,7 +10,7 @@ function Icon({ size = 15, children, ...rest }: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.9}
+      strokeWidth={1.6}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -123,4 +123,17 @@ export const DownloadIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
   </Icon>
+);
+export const GearIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" />
+  </Icon>
+);
+/** The app's logo: a probe trace on the Windows accent blue. Same drawing as the app icon. */
+export const AppLogo = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="pointer-events-none shrink-0">
+    <rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#005fb8" />
+    <path d="M5.5 12.5h3l2-5 3 9 2-6 1.5 2h1.5" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
 );

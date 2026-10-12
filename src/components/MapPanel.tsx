@@ -5,9 +5,9 @@ import { distance, type GpsSimulator, type LatLon } from "../lib/gpsSimulator";
 import type { PositionTracker } from "../lib/positionTracker";
 import type { RouteData } from "../lib/routeData";
 import { type BurstResult, formatDistance, type RoutePlayer } from "../lib/routePlayer";
+import { t } from "../lib/i18n";
 import { cssColor, type Theme } from "../lib/theme";
 import { TrashIcon } from "./icons";
-import { IconButton, ToggleButton } from "./ui";
 
 interface Props {
   tracker: PositionTracker;
@@ -16,6 +16,8 @@ interface Props {
   theme: Theme;
   /** The map lives in a tab; Leaflet must re-measure when it becomes visible. */
   visible: boolean;
+  /** Which GPS source is in use: it decides whether the reference route or the sent position is drawn. */
+  source: "route" | "synthetic";
 }
 
 const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -67,7 +69,7 @@ function headingBetween(a: LatLon, b: LatLon) {
  * ring) or the reference route of a recorded route (grey dashed line, start
  * and end pins, wrong answers in red).
  */
-export function MapPanel({ tracker, simulator, player, theme, visible }: Props) {
+export function MapPanel({ tracker, simulator, player, theme, visible, source }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<{
@@ -80,6 +82,8 @@ export function MapPanel({ tracker, simulator, player, theme, visible }: Props) 
   const followRef = useRef(true);
   const showSentRef = useRef(true);
   const showRefRef = useRef(true);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
   const [follow, setFollow] = useState(true);
   const [showSent, setShowSent] = useState(true);
   const [showRef, setShowRef] = useState(true);
@@ -89,7 +93,10 @@ export function MapPanel({ tracker, simulator, player, theme, visible }: Props) 
   useEffect(() => {
     const first = player.route?.steps[0];
     const start: LatLon = tracker.last ?? (first ? { lat: first.streetLat, lon: first.streetLon } : simulator.config);
-    const map = L.map(hostRef.current!, { zoomControl: false }).setView(toLatLng(start), START_ZOOM);
+    const map = L.map(hostRef.current!, { zoomControl: false, scrollWheelZoom: false }).setView(toLatLng(start), START_ZOOM);
+    // The map sits in a scrolling panel: the wheel scrolls the panel until the map is clicked.
+    map.on("click", () => map.scrollWheelZoom.enable());
+    map.on("mouseout", () => map.scrollWheelZoom.disable());
     L.control.zoom({ position: "topright" }).addTo(map);
     L.tileLayer(TILE_URL, { maxZoom: 19, attribution: ATTRIBUTION })
       .on("tileerror", () => setOffline(true))
@@ -132,27 +139,35 @@ export function MapPanel({ tracker, simulator, player, theme, visible }: Props) 
           endPin.remove();
         }
       }
-      reference.setStyle({ opacity: showRefRef.current ? 0.5 : 0 });
+      const routeMode = sourceRef.current === "route";
+      reference.setStyle({ opacity: showRefRef.current && routeMode ? 0.5 : 0 });
+      if (route && routeMode) {
+        if (!map.hasLayer(startPin)) startPin.addTo(map);
+        if (!map.hasLayer(endPin)) endPin.addTo(map);
+      } else {
+        startPin.remove();
+        endPin.remove();
+      }
 
       // Wrong answers of the route, in red, with what was expected.
       const results = player.results;
-      const wrongKey = `${route ? results.length : 0}:${results[results.length - 1]?.verdict}`;
+      const wrongKey = `${route && routeMode ? results.length : 0}:${results[results.length - 1]?.verdict}`;
       if (wrongKey !== drawnWrong) {
         drawnWrong = wrongKey;
         wrong.clearLayers();
         const color = cssColor("--color-err");
-        for (const r of route ? results : []) {
+        for (const r of route && routeMode ? results : []) {
           const p = r.responses.find((x) => x.kind === "pos");
           if (r.verdict !== "wrong" || !p) continue;
           L.circleMarker([p.lat!, p.lon!], { radius: 6, color, weight: 2, fillColor: color, fillOpacity: 0.6 })
-            .bindTooltip(`#${r.step.index} ${r.step.utc}: ${p.text}<br>expected ${r.expected ?? "no response"}${r.errorMeters !== null ? ` (${formatDistance(r.errorMeters)})` : ""}`)
+            .bindTooltip(`#${r.step.index} ${r.step.utc}: ${p.text}<br>${t("expected")} ${r.expected ?? t("no response")}${r.errorMeters !== null ? ` (${formatDistance(r.errorMeters)})` : ""}`)
             .addTo(wrong);
         }
       }
 
       const last = tracker.last;
       const sentLast = simulator.trail[simulator.trail.length - 1] ?? null;
-      const key = `${tracker.version}|${simulator.trail.length}|${sentLast?.lat}|${showSentRef.current}`;
+      const key = `${tracker.version}|${simulator.trail.length}|${sentLast?.lat}|${showSentRef.current}|${routeMode}`;
       if (key !== drawn) {
         drawn = key;
         mcuTrail.setLatLngs(tracker.trail.map(toLatLng));
@@ -173,7 +188,7 @@ export function MapPanel({ tracker, simulator, player, theme, visible }: Props) 
           car.remove();
         }
 
-        const sentVisible = showSentRef.current && sentLast !== null;
+        const sentVisible = showSentRef.current && sentLast !== null && !routeMode;
         sentTrail.setLatLngs(sentVisible ? simulator.trail.map(toLatLng) : []);
         if (sentVisible) {
           ghost.setLatLng(toLatLng(sentLast));
@@ -240,15 +255,12 @@ export function MapPanel({ tracker, simulator, player, theme, visible }: Props) 
   };
 
   const { reported, sent, gap, noSignal, routeResult, hasRoute } = readout;
-  const routeWrong = routeResult?.verdict === "wrong" && routeResult.errorMeters !== null ? routeResult : null;
-  const mismatch = !hasRoute && gap !== null && gap > MISMATCH_METERS;
+  const routeMode = source === "route" && hasRoute;
+  const routeWrong = routeMode && routeResult?.verdict === "wrong" && routeResult.errorMeters !== null ? routeResult : null;
+  const mismatch = !routeMode && gap !== null && gap > MISMATCH_METERS;
 
   const showBoth = () => {
-    let target: LatLon | null = null;
-    if (routeWrong) {
-      const step = routeWrong.step;
-      target = { lat: step.streetLat, lon: step.streetLon };
-    } else target = sent;
+    const target: LatLon | null = routeWrong ? { lat: routeWrong.step.streetLat, lon: routeWrong.step.streetLon } : sent;
     if (!reported || !target) return;
     followRef.current = false;
     setFollow(false);
@@ -261,132 +273,101 @@ export function MapPanel({ tracker, simulator, player, theme, visible }: Props) 
   };
 
   const warning = routeWrong
-    ? `Burst ${routeWrong.step.index}: the device reports a position ${formatDistance(routeWrong.errorMeters!)} away from the expected one. Check the ddmm.mmmm to degrees conversion and the N/S, E/W signs.`
+    ? t("Frame {n}: the board reports a position {d} away from the expected one. Check the ddmm.mmmm to degrees conversion and the N/S, E/W signs.", {
+        n: routeWrong.step.index,
+        d: formatDistance(routeWrong.errorMeters!),
+      })
     : mismatch
-      ? `The device reports a position ${formatDistance(gap!)} away from the one sent. Check how it converts ddmm.mmmm to degrees and the N/S, E/W signs.`
+      ? t("The board reports a position {d} away from the one sent. Check the ddmm.mmmm to degrees conversion and the N/S, E/W signs.", { d: formatDistance(gap!) })
       : null;
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-[200px] flex-1 flex-col gap-0.5">
-          <h2 className="m-0 text-[15px] font-semibold">Map</h2>
-          <span className="text-xs text-muted">Position from received lines (POS,lat,lon · lat=… lon=… · NMEA GGA)</span>
-        </div>
-        {hasRoute ? (
-          <ToggleButton pressed={showRef} onClick={toggleRef} title="Show the reference route of the CSV">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="4 3" aria-hidden="true">
-              <path d="M3 18c5-1 6-12 18-12" />
-            </svg>
-            Reference
-          </ToggleButton>
-        ) : (
-          <ToggleButton pressed={showSent} onClick={toggleSent} title="Show the position the simulator sent">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2.5" aria-hidden="true">
-              <circle cx="12" cy="12" r="8" />
-            </svg>
-            Sent
-          </ToggleButton>
-        )}
-        <ToggleButton pressed={follow} onClick={toggleFollow} title="Keep the reported position centered">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
-          </svg>
-          Follow vehicle
-        </ToggleButton>
-        <IconButton label="Clear the device track" onClick={clearTracks}>
-          <TrashIcon size={14} />
-        </IconButton>
-      </div>
+  const overlayButton = "flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-panel px-2.5 text-xs text-fg-2 shadow-[0_2px_8px_var(--color-shadow)] hover:text-fg";
+  const pressedRing = "ring-2 ring-accent/60";
 
-      <div className={`relative min-h-[240px] flex-1 overflow-hidden rounded-lg border border-line ${theme === "dark" ? "map-dark" : ""}`}>
+  let status: { text: string; tone: string };
+  if (!reported) status = { text: noSignal ? t("The board answers NOFIX: no position yet") : t("Waiting for a position from the board"), tone: "text-muted" };
+  else if (!reported.fix) status = { text: t("NOFIX · last known position"), tone: "text-warn" };
+  else status = { text: `${reported.lat.toFixed(6)}, ${reported.lon.toFixed(6)} · ${t("{s} s ago", { s: reported.age.toFixed(1) })}`, tone: "text-fg-2" };
+
+  let check: { text: string; tone: string } | null = null;
+  if (routeMode && routeResult && routeResult.verdict !== "pending") {
+    const v = routeResult.verdict;
+    check = {
+      text:
+        v === "ok" || v === "rounding"
+          ? `✓ ${t("matches the CSV")}`
+          : v === "wrong"
+            ? `✗ ${t("expected")} ${routeResult.expected ?? t("no response")}`
+            : v === "format"
+              ? `✗ ${t("format error")}`
+              : v === "duplicate"
+                ? t("duplicate answer")
+                : t("no answer"),
+      tone: v === "ok" || v === "rounding" ? "text-ok" : v === "wrong" || v === "format" ? "text-err" : "text-warn",
+    };
+  } else if (!routeMode && gap !== null) {
+    check = { text: `${t("Difference with the sent position")}: ${formatDistance(gap)}`, tone: mismatch ? "text-warn" : "text-ok" };
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className={`relative h-[clamp(220px,36vh,460px)] overflow-hidden rounded-xl border border-line ${theme === "dark" ? "map-dark" : ""}`}>
         <div ref={hostRef} className="absolute inset-0" />
 
+        <div className="absolute top-2.5 right-12 z-[500] flex flex-col items-end gap-1.5">
+          {routeMode ? (
+            <button type="button" aria-pressed={showRef} onClick={toggleRef} className={`${overlayButton} ${showRef ? pressedRing : ""}`}>
+              {t("Reference route")}
+            </button>
+          ) : (
+            <button type="button" aria-pressed={showSent} onClick={toggleSent} className={`${overlayButton} ${showSent ? pressedRing : ""}`}>
+              {t("Sent position")}
+            </button>
+          )}
+          <button type="button" aria-pressed={follow} onClick={toggleFollow} className={`${overlayButton} ${follow ? pressedRing : ""}`}>
+            {t("Follow vehicle")}
+          </button>
+          <button type="button" onClick={clearTracks} title={t("Clear the board's track")} className={overlayButton}>
+            <TrashIcon size={12} />
+            {t("Clear track")}
+          </button>
+        </div>
+
         {!reported && !sent && !noSignal && (
-          <div className="pointer-events-none absolute inset-x-0 top-3 z-[500] mx-auto w-fit max-w-[85%] rounded-lg border border-line-strong bg-panel px-3 py-2 text-center text-xs leading-relaxed text-muted shadow-[0_4px_14px_var(--color-shadow)]">
-            Waiting for a position: lines like <code className="font-mono text-fg-2">POS,43.307078,-2.011059</code> or NMEA GGA sentences
+          <div className="pointer-events-none absolute inset-x-0 bottom-8 z-[500] mx-auto w-fit max-w-[80%] rounded-lg border border-line-strong bg-panel px-3 py-2 text-center text-xs leading-relaxed text-muted shadow-[0_4px_14px_var(--color-shadow)]">
+            {t("The board's answers are drawn here: lines like")} <code className="font-mono text-fg-2">POS,43.307078,-2.011059</code>
           </div>
         )}
         {noSignal && (
-          <div className="pointer-events-none absolute inset-x-0 top-3 z-[500] mx-auto flex w-fit items-center gap-2 rounded-full border border-warn bg-panel px-3.5 py-1.5 text-xs font-semibold text-warn shadow-[0_4px_14px_var(--color-shadow)]">
+          <div className="pointer-events-none absolute top-2.5 left-1/2 z-[500] flex -translate-x-1/2 items-center gap-2 rounded-full border border-warn bg-panel px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap text-warn shadow-[0_4px_14px_var(--color-shadow)]">
             <span className="size-2 animate-pulse rounded-full bg-warn" />
-            No GPS signal (NOFIX)
+            {t("No GPS signal (NOFIX)")}
           </div>
         )}
         {warning && (
-          <div className="absolute top-12 left-3 right-14 z-[500] flex items-start gap-2 rounded-lg border border-err bg-panel px-3 py-2 text-xs leading-relaxed text-fg shadow-[0_4px_14px_var(--color-shadow)]">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-err)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-px shrink-0">
-              <path d="M12 3 2 21h20zM12 10v5M12 18v.5" />
-            </svg>
+          <div className="absolute right-3 bottom-8 left-3 z-[500] flex items-start gap-2 rounded-lg border border-err bg-panel px-3 py-2 text-xs leading-relaxed text-fg shadow-[0_4px_14px_var(--color-shadow)]">
+            <span className="font-semibold text-err">!</span>
             <span className="flex-1">{warning}</span>
             <button type="button" onClick={showBoth} className="shrink-0 font-medium text-tx hover:underline">
-              Show both
+              {t("Show both")}
             </button>
           </div>
         )}
         {offline && (
           <div className="pointer-events-none absolute inset-x-3 bottom-8 z-[500] rounded-lg border border-line-strong bg-panel px-3 py-2 text-xs text-muted">
-            Map tiles could not load. They need an internet connection; positions are still drawn.
+            {t("Map tiles could not load. They need an internet connection; positions are still drawn.")}
           </div>
         )}
       </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-line bg-raised px-2.5 py-2">
-          <span className="flex items-center gap-1.5 text-[11px] text-muted">
-            <svg width="11" height="11" viewBox="-12 -12 24 24" aria-hidden="true">
-              <path d="M0,-11 L8,9 L0,4.5 L-8,9 Z" fill="var(--color-accent)" />
-            </svg>
-            Reported by the device (RX)
-          </span>
-          <span className="truncate font-mono text-[12.5px]">{reported ? `${reported.lat.toFixed(6)}, ${reported.lon.toFixed(6)}` : "—"}</span>
-          <span className="text-[11px] text-muted">
-            {!reported ? (noSignal ? "NOFIX, no position yet" : "No position yet") : reported.fix ? `Updated ${reported.age.toFixed(1)} s ago` : "NOFIX · last known position"}
-          </span>
-        </div>
-        {hasRoute ? (
-          <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-line bg-raised px-2.5 py-2">
-            <span className="text-[11px] text-muted">Expected (reference CSV){routeResult ? ` · burst ${routeResult.step.index}` : ""}</span>
-            <span className="truncate font-mono text-[12.5px]">{routeResult ? (routeResult.expected ?? "no response") : "—"}</span>
-            <span
-              className={`text-[11px] ${
-                !routeResult || routeResult.verdict === "pending"
-                  ? "text-muted"
-                  : routeResult.verdict === "ok" || routeResult.verdict === "rounding"
-                    ? "text-ok"
-                    : routeResult.verdict === "wrong" || routeResult.verdict === "format"
-                      ? "text-err"
-                      : "text-warn"
-              }`}
-            >
-              {!routeResult
-                ? "Route not started"
-                : {
-                    pending: "Waiting for the answer…",
-                    ok: "✓ Correct",
-                    rounding: "✓ Correct (rounding in the 6th decimal)",
-                    wrong: `✗ Wrong${routeResult.errorMeters !== null ? ` · ${formatDistance(routeResult.errorMeters)}` : ""}`,
-                    format: "✗ Format error",
-                    noResponse: "No response",
-                    duplicate: "Duplicate response",
-                  }[routeResult.verdict]}
-            </span>
-          </div>
-        ) : (
-          <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-line bg-raised px-2.5 py-2">
-            <span className="flex items-center gap-1.5 text-[11px] text-muted">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--color-tx)" strokeWidth="2.5" strokeDasharray="3 2.5" aria-hidden="true">
-                <circle cx="12" cy="12" r="8" />
-              </svg>
-              Sent by the simulator (TX)
-            </span>
-            <span className="truncate font-mono text-[12.5px]">{sent ? `${sent.lat.toFixed(6)}, ${sent.lon.toFixed(6)}` : "—"}</span>
-            <span className={`text-[11px] ${gap === null ? "text-muted" : mismatch ? "text-warn" : "text-ok"}`}>
-              {gap === null ? (sent ? "Simulator stopped" : "Simulator not running") : `Difference ${formatDistance(gap)}`}
-            </span>
-          </div>
-        )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 font-mono text-[11.5px]">
+        <span className="flex items-center gap-1.5 text-muted">
+          <svg width="10" height="10" viewBox="-12 -12 24 24" aria-hidden="true">
+            <path d="M0,-11 L8,9 L0,4.5 L-8,9 Z" fill="var(--color-accent)" />
+          </svg>
+          {t("Board")}:
+        </span>
+        <span className={status.tone}>{status.text}</span>
+        {check && <span className={`ml-auto ${check.tone}`}>{check.text}</span>}
       </div>
     </div>
   );
