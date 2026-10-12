@@ -1,6 +1,6 @@
 # Architecture
 
-FreeSerial is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the serial port and a React + TypeScript frontend rendered by the system web view.
+Sonda Serial is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the serial port and a React + TypeScript frontend rendered by the system web view.
 
 ```
 ┌──────────────── Rust (src-tauri) ────────────────┐      ┌────────────── Frontend (src) ──────────────┐
@@ -30,7 +30,8 @@ FreeSerial is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the 
 - `lib/encoding.ts`: line endings and escape handling (`\r`, `\n`, `\xHH`…) for sent commands.
 - `lib/serial.ts`: typed wrappers around the Tauri commands.
 - `lib/settings.ts`: settings persisted in `localStorage`.
-- `components/`: `ConnectionBar`, `QuickCommands`, `TerminalPanel` (toolbar, terminal, send bar), `PlotPanel`.
+- `lib/theme.ts`: resolves the light/dark preference (or the OS setting) and sets `data-theme` on the root element. Colors are CSS tokens in `index.css`; light mode redefines the same tokens. The terminal and the plot get the theme explicitly, since xterm.js and uPlot take colors from JavaScript.
+- `components/`: `ConnectionBar` (title bar, port settings as grouped radio buttons, folded summary when connected), `FrameDiagram` (UART frame for the current settings), `QuickCommands`, `TerminalPanel` (toolbar, terminal, send bar), `PlotPanel`.
 
 ### Performance rules
 

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import type { LineEnding } from "./encoding";
 import type { FlowControl, Parity, PortConfig } from "./serial";
+import type { ThemePreference } from "./theme";
 
 export interface QuickCommand {
   id: string;
   name: string;
   command: string;
 }
+
+export type YAxisMode = "auto" | "expand" | "manual";
 
 export interface Settings {
   port: string;
@@ -22,8 +25,12 @@ export interface Settings {
   echo: boolean;
   showPlot: boolean;
   plotWindow: number;
+  plotYMode: YAxisMode;
+  plotYMin: number | null;
+  plotYMax: number | null;
   history: string[];
   quickCommands: QuickCommand[];
+  theme: ThemePreference;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,11 +47,15 @@ export const DEFAULT_SETTINGS: Settings = {
   echo: true,
   showPlot: true,
   plotWindow: 10,
+  plotYMode: "auto",
+  plotYMin: null,
+  plotYMax: null,
   history: [],
-  quickCommands: [{ id: "q1", name: "Leer", command: "LEER" }],
+  quickCommands: [{ id: "q1", name: "Read", command: "READ" }],
+  theme: "system",
 };
 
-const KEY = "freeserial.settings.v1";
+const KEY = "sonda-serial.settings.v1";
 
 function load(): Settings {
   try {

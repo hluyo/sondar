@@ -1,7 +1,7 @@
 export type LineEnding = "none" | "cr" | "lf" | "crlf";
 
 export const LINE_ENDINGS: { id: LineEnding; label: string; bytes: number[]; escaped: string }[] = [
-  { id: "none", label: "Nada", bytes: [], escaped: "" },
+  { id: "none", label: "None", bytes: [], escaped: "" },
   { id: "cr", label: "CR", bytes: [0x0d], escaped: "\\r" },
   { id: "lf", label: "LF", bytes: [0x0a], escaped: "\\n" },
   { id: "crlf", label: "CR+LF", bytes: [0x0d, 0x0a], escaped: "\\r\\n" },

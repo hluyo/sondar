@@ -194,7 +194,7 @@ pub fn close_port(state: State<'_, SerialState>) -> Result<(), String> {
 #[tauri::command]
 pub fn write_port(state: State<'_, SerialState>, data: Vec<u8>) -> Result<(), String> {
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
-    let connection = guard.as_mut().ok_or("El puerto no está abierto")?;
+    let connection = guard.as_mut().ok_or("Port is not open")?;
     connection
         .writer
         .write_all(&data)
@@ -209,7 +209,7 @@ pub fn set_signals(
     rts: Option<bool>,
 ) -> Result<(), String> {
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
-    let connection = guard.as_mut().ok_or("El puerto no está abierto")?;
+    let connection = guard.as_mut().ok_or("Port is not open")?;
     if let Some(level) = dtr {
         connection
             .writer

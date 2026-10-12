@@ -7,6 +7,7 @@ import { encodeCommand } from "./lib/encoding";
 import { PlotStore } from "./lib/plotStore";
 import { closePort, frameLabel, listPorts, openPort, type PortInfo, writePort } from "./lib/serial";
 import { toPortConfig, useSettings } from "./lib/settings";
+import { useTheme } from "./lib/theme";
 import { Emitter, formatBytes, type StreamEvent } from "./lib/stream";
 
 const RECONNECT_MS = 1000;
@@ -14,6 +15,7 @@ const HISTORY_SIZE = 50;
 
 export default function App() {
   const [settings, update] = useSettings();
+  const theme = useTheme(settings.theme);
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
@@ -37,7 +39,7 @@ export default function App() {
     try {
       setPorts(await listPorts());
     } catch (e) {
-      error(`No se pudieron listar los puertos: ${e}`);
+      error(`Could not list ports: ${e}`);
     }
   }, [error]);
 
@@ -68,7 +70,7 @@ export default function App() {
   const connect = useCallback(async () => {
     const s = settingsRef.current;
     if (!s.port) {
-      error("Elige un puerto antes de conectar");
+      error("Choose a port before connecting");
       return;
     }
     const config = toPortConfig(s);
@@ -86,9 +88,9 @@ export default function App() {
         } else if (event.reason) {
           // The port failed underneath us (cable pulled, board reset…).
           generation.current++;
-          error(`Conexión perdida: ${event.reason}`);
+          error(`Connection lost: ${event.reason}`);
           if (settingsRef.current.autoReconnect) {
-            info(`Esperando a que vuelva ${config.port}…`);
+            info(`Waiting for ${config.port} to come back…`);
             setStatus("reconnecting");
           } else {
             setStatus("disconnected");
@@ -98,7 +100,7 @@ export default function App() {
       if (id !== generation.current) return;
       setStatus("connected");
       setConnectedAt(Date.now());
-      info(`${config.port} abierto · ${config.baudRate} ${frameLabel(config)}`);
+      info(`${config.port} opened · ${config.baudRate} ${frameLabel(config)}`);
     } catch (e) {
       if (id !== generation.current) return;
       if (retrying) return; // keep waiting quietly
@@ -114,7 +116,7 @@ export default function App() {
     try {
       await closePort();
     } finally {
-      info(wasConnected ? `${settingsRef.current.port} cerrado` : "Reconexión cancelada");
+      info(wasConnected ? `${settingsRef.current.port} closed` : "Reconnect cancelled");
     }
   }, [info]);
 
@@ -134,7 +136,7 @@ export default function App() {
       const s = settingsRef.current;
       update({ history: [...s.history.filter((h) => h !== text), text].slice(-HISTORY_SIZE) });
       if (statusRef.current !== "connected") {
-        error(`No enviado (puerto cerrado): ${text}`);
+        error(`Not sent (port closed): ${text}`);
         return;
       }
       const bytes = encodeCommand(text, s.lineEnding);
@@ -143,7 +145,7 @@ export default function App() {
         countersRef.current.tx += bytes.length;
         bus.emit({ kind: "tx", text, bytes, ending: s.lineEnding, time: Date.now() });
       } catch (e) {
-        error(`Error al enviar: ${e}`);
+        error(`Send failed: ${e}`);
       }
     },
     [bus, error, update],
@@ -177,6 +179,8 @@ export default function App() {
         status={status}
         connectedAt={connectedAt}
         onToggleConnection={status === "disconnected" ? connect : disconnect}
+        theme={theme}
+        onToggleTheme={() => update({ theme: theme === "dark" ? "light" : "dark" })}
       />
 
       <main className="flex min-h-0 flex-1 gap-3 p-3">
@@ -185,12 +189,21 @@ export default function App() {
           onChange={(quickCommands) => update({ quickCommands })}
           onRun={send}
         />
-        <TerminalPanel bus={bus} settings={settings} update={update} onSend={send} onClear={clearAll} />
+        <TerminalPanel bus={bus} theme={theme} settings={settings} update={update} onSend={send} onClear={clearAll} />
         {settings.showPlot && (
           <PlotPanel
             store={plotStore}
+            theme={theme}
             windowSeconds={settings.plotWindow}
             onWindowChange={(plotWindow) => update({ plotWindow })}
+            yAxis={{ mode: settings.plotYMode, min: settings.plotYMin, max: settings.plotYMax }}
+            onYAxisChange={(a) =>
+              update({
+                ...(a.mode !== undefined && { plotYMode: a.mode }),
+                ...(a.min !== undefined && { plotYMin: a.min }),
+                ...(a.max !== undefined && { plotYMax: a.max }),
+              })
+            }
           />
         )}
       </main>

@@ -2,28 +2,32 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { LINE_ENDINGS, type LineEnding } from "../lib/encoding";
 import type { Settings } from "../lib/settings";
 import type { Emitter, StreamEvent } from "../lib/stream";
+import type { Theme } from "../lib/theme";
 import { TerminalRenderer } from "../lib/terminalRenderer";
 import { ArrowDownIcon, ClockIcon, EchoIcon, PauseIcon, PlayIcon, SendIcon, TrashIcon } from "./icons";
 import { IconButton, Segmented, ToggleButton } from "./ui";
 
 interface Props {
   bus: Emitter<StreamEvent>;
+  theme: Theme;
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
   onSend: (text: string) => void;
   onClear: () => void;
 }
 
-export function TerminalPanel({ bus, settings, update, onSend, onClear }: Props) {
+export function TerminalPanel({ bus, theme, settings, update, onSend, onClear }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<TerminalRenderer | null>(null);
   const [paused, setPaused] = useState(false);
   const [pendingLines, setPendingLines] = useState(0);
   const [atBottom, setAtBottom] = useState(true);
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   useEffect(() => {
     const host = hostRef.current!;
-    const renderer = new TerminalRenderer(host);
+    const renderer = new TerminalRenderer(host, themeRef.current);
     rendererRef.current = renderer;
     renderer.onPendingChange = setPendingLines;
     renderer.onScrollChange = setAtBottom;
@@ -55,6 +59,8 @@ export function TerminalPanel({ bus, settings, update, onSend, onClear }: Props)
     r.echo = settings.echo;
   }, [settings.viewMode, settings.timestamps, settings.echo]);
 
+  useEffect(() => rendererRef.current?.setTheme(theme), [theme]);
+
   const togglePause = () => {
     const next = !paused;
     setPaused(next);
@@ -77,7 +83,7 @@ export function TerminalPanel({ bus, settings, update, onSend, onClear }: Props)
     <section aria-label="Terminal" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-panel">
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-2.5 py-2">
         <Segmented
-          label="Vista"
+          label="View"
           mono
           value={settings.viewMode}
           options={[
@@ -88,15 +94,15 @@ export function TerminalPanel({ bus, settings, update, onSend, onClear }: Props)
         />
         <ToggleButton pressed={settings.timestamps} onClick={() => update({ timestamps: !settings.timestamps })}>
           <ClockIcon size={14} />
-          Hora
+          Time
         </ToggleButton>
         <ToggleButton
           pressed={settings.echo}
-          title="Mostrar en la terminal lo que se envía"
+          title="Show sent commands in the terminal"
           onClick={() => update({ echo: !settings.echo })}
         >
           <EchoIcon size={14} />
-          Eco
+          Echo
         </ToggleButton>
         <div className="min-w-0 flex-1" />
         <button
@@ -105,9 +111,9 @@ export function TerminalPanel({ bus, settings, update, onSend, onClear }: Props)
           className="flex h-9 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-fg hover:bg-raised"
         >
           {paused ? <PlayIcon size={14} /> : <PauseIcon size={14} />}
-          {paused ? "Seguir" : "Pausar"}
+          {paused ? "Resume" : "Pause"}
         </button>
-        <IconButton label="Limpiar terminal y gráfica" onClick={clear}>
+        <IconButton label="Clear terminal and plot" onClick={clear}>
           <TrashIcon />
         </IconButton>
       </div>
@@ -118,10 +124,10 @@ export function TerminalPanel({ bus, settings, update, onSend, onClear }: Props)
           <button
             type="button"
             onClick={goToEnd}
-            className="absolute right-5 bottom-3.5 flex h-9 items-center gap-2 rounded-full bg-accent px-3.5 font-semibold text-on-accent shadow-[0_6px_20px_rgba(0,0,0,0.45)] hover:brightness-110"
+            className="absolute right-5 bottom-3.5 flex h-9 items-center gap-2 rounded-full bg-accent px-3.5 font-semibold text-on-accent shadow-[0_6px_20px_var(--color-shadow)] hover:brightness-110"
           >
             <ArrowDownIcon size={14} />
-            Ir al final{paused && pendingLines > 0 ? ` · ${pendingLines} nuevas` : ""}
+            Go to end{paused && pendingLines > 0 ? ` · ${pendingLines} new` : ""}
           </button>
         )}
       </div>
@@ -161,8 +167,8 @@ function SendBar({ settings, update, onSend }: Pick<Props, "settings" | "update"
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-line bg-[#0f1217] p-2.5">
-      <label className="flex h-11 min-w-0 flex-[1_1_280px] items-center gap-2 rounded-lg border border-[#2a303b] bg-field px-3 focus-within:border-line-focus">
+    <div className="flex flex-wrap items-center gap-2 border-t border-line bg-sendbar p-2.5">
+      <label className="flex h-11 min-w-0 flex-[1_1_280px] items-center gap-2 rounded-lg border border-line-input bg-field px-3 focus-within:border-line-focus">
         <span className="font-mono font-medium text-accent">›</span>
         <input
           value={text}
@@ -171,15 +177,15 @@ function SendBar({ settings, update, onSend }: Pick<Props, "settings" | "update"
             setHistoryIndex(-1);
           }}
           onKeyDown={onKeyDown}
-          aria-label="Comando a enviar"
-          placeholder="Escribe un comando…   ↑↓ historial   \r \n \xHH"
+          aria-label="Command to send"
+          placeholder="Type a command…   ↑↓ history   \r \n \xHH"
           autoComplete="off"
           spellCheck={false}
           className="h-10 min-w-0 flex-1 border-0 bg-transparent font-mono text-[13px] text-fg outline-none placeholder:text-dim"
         />
       </label>
       <Segmented<LineEnding>
-        label="Fin de línea"
+        label="Line ending"
         mono
         value={settings.lineEnding}
         options={LINE_ENDINGS.map((e) => ({ value: e.id, label: e.label }))}
@@ -190,7 +196,7 @@ function SendBar({ settings, update, onSend }: Pick<Props, "settings" | "update"
         onClick={submit}
         className="flex h-11 items-center gap-2 rounded-lg bg-accent px-[18px] font-semibold text-on-accent hover:brightness-110"
       >
-        Enviar
+        Send
         <SendIcon size={14} />
       </button>
     </div>

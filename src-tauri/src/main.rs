@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    freeserial_lib::run()
+    sonda_serial_lib::run()
 }

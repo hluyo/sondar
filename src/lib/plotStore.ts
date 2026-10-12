@@ -2,7 +2,7 @@ import { parseLine } from "./lineParser";
 
 const MAX_POINTS = 60_000;
 
-export const CHANNEL_COLORS = ["#ffb020", "#3d9bff", "#4fd1a5", "#d9dde3", "#ff7b7b", "#b49bff", "#f472b6", "#a3e635"];
+export const CHANNEL_COLORS = ["#ffb020", "#3d9bff", "#4fd1a5", "#8b95a5", "#ff7b7b", "#b49bff", "#f472b6", "#a3e635"];
 
 export interface ChannelStats {
   name: string;

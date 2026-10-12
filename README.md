@@ -1,4 +1,4 @@
-# FreeSerial
+# Sonda Serial
 
 A free, open source serial terminal with live plotting, for working with microcontrollers over UART.
 
@@ -8,13 +8,15 @@ Install it, open it, pick a port and read. Send commands to your board and watch
 
 ## Features
 
-- **Fast to connect.** Port, baud rate, frame (data bits, parity, stop bits) and flow control in one compact bar. The last configuration is remembered.
+- **All port settings in view.** Port, baud rate, data bits, parity, stop bits and flow control as grouped options you change with one click, like classic serial terminals. Once connected they fold into a one-line summary. The last configuration is remembered.
+- **UART frame diagram.** Shows how a character travels on the wire with the current settings (start, data bits LSB first, parity, stop), plus bit time and maximum characters per second.
 - **Terminal that behaves.** Auto-scroll that follows new data, stays put when you scroll up, and offers a "go to end" button. Pause without losing data.
 - **ASCII and HEX views**, optional timestamps, echo of sent commands, ANSI colors from the device.
 - **Send line** with history (↑/↓), line ending selector (none, CR, LF, CR+LF) and escapes for raw bytes: `\r`, `\n`, `\t`, `\0`, `\\`, `\xHH`.
 - **Quick commands** with a name, editable in place, triggered with a click or F1–F12.
-- **Live plot** of numeric lines: channels are detected automatically, with min/max/mean per channel and a 5–60 s time window.
+- **Live plot** of numeric lines: channels are detected automatically, with min/max/mean per channel and a 5–60 s time window. Pick which channels to show, and choose how the Y axis behaves: **Auto** (fits the visible data), **Expand** (grows to fit new peaks and never shrinks) or **Manual** (fixed min and max).
 - **Auto-reconnect** when the board is unplugged or reset.
+- **Light and dark themes**, following the system setting by default.
 
 ### Plot format
 

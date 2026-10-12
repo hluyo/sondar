@@ -1,22 +1,41 @@
 import type { ReactNode } from "react";
 
-/** Labeled control with the compact "field pill" look of the connection bar. */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+/** Radio option in the style of the connection panel groups. */
+export function Radio({
+  name,
+  checked,
+  onChange,
+  disabled,
+  title,
+  mono,
+  children,
+}: {
+  name: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  title?: string;
+  mono?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <label className="flex h-10 items-center gap-2 rounded-lg border border-line-strong bg-field pl-3 pr-1">
-      <span className="text-xs text-muted">{label}</span>
-      {children}
+    <label
+      title={title}
+      className={`flex min-h-6 cursor-pointer items-center gap-2 rounded-[5px] pr-1.5 pl-0.5 whitespace-nowrap text-fg-2 hover:bg-field has-checked:font-medium has-checked:text-fg has-disabled:cursor-default has-disabled:hover:bg-transparent ${
+        disabled ? "opacity-40" : ""
+      }`}
+    >
+      <input type="radio" name={name} checked={checked} onChange={onChange} disabled={disabled} className="peer sr-only" />
+      <span className="size-[13px] shrink-0 rounded-full border-[1.5px] border-line-focus bg-bg peer-checked:border-accent peer-checked:bg-[radial-gradient(circle,var(--color-accent)_0_3.5px,var(--color-bg)_4px)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-tx" />
+      <span className={mono ? "font-mono text-xs tabular-nums" : ""}>{children}</span>
     </label>
   );
 }
 
-export const selectClass =
-  "h-9 border-0 bg-transparent pr-1 font-medium text-fg outline-none disabled:text-muted";
-
 interface SegmentedProps<T extends string | number> {
   label: string;
   value: T;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; title?: string }[];
   onChange: (value: T) => void;
   mono?: boolean;
 }
@@ -31,9 +50,10 @@ export function Segmented<T extends string | number>({ label, value, options, on
             key={String(o.value)}
             type="button"
             aria-pressed={on}
+            title={o.title}
             onClick={() => onChange(o.value)}
             className={`h-[30px] rounded-md px-2.5 text-xs ${mono ? "font-mono" : ""} ${
-              on ? "bg-[#262c36] text-[#f2f4f7] shadow-[inset_0_0_0_1px_#363e4b]" : "text-muted hover:text-fg-2"
+              on ? "bg-seg-on text-seg-on-fg shadow-[inset_0_0_0_1px_var(--color-line-focus)]" : "text-muted hover:text-fg-2"
             }`}
           >
             {o.label}
@@ -62,7 +82,7 @@ export function ToggleButton({
       title={title}
       onClick={onClick}
       className={`flex h-9 items-center gap-1.5 rounded-md px-2.5 ${
-        pressed ? "bg-[#1a1f27] text-fg" : "text-muted hover:text-fg-2"
+        pressed ? "bg-toggle-on text-fg" : "text-muted hover:text-fg-2"
       }`}
     >
       {children}

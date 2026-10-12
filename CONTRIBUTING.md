@@ -1,4 +1,4 @@
-# Contributing to FreeSerial
+# Contributing to Sonda Serial
 
 Thanks for your interest! Bug reports, ideas and pull requests are welcome.
 

@@ -822,17 +822,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "freeserial"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "serialport",
- "tauri",
- "tauri-build",
-]
-
-[[package]]
 name = "futures-channel"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2910,6 +2899,17 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "sonda-serial"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serialport",
+ "tauri",
+ "tauri-build",
 ]
 
 [[package]]

@@ -19,19 +19,19 @@ export function QuickCommands({ commands, onChange, onRun }: Props) {
     onChange(commands.map((c) => (c.id === id ? { ...c, ...p } : c)));
 
   const add = () => {
-    onChange([...commands, { id: crypto.randomUUID(), name: "Nuevo", command: "" }]);
+    onChange([...commands, { id: crypto.randomUUID(), name: "New", command: "" }]);
     setEditing(true);
   };
 
   return (
-    <aside aria-label="Comandos rápidos" className="flex w-[248px] shrink-0 flex-col gap-1.5 overflow-y-auto rounded-xl border border-line bg-panel p-3 scroll-thin">
+    <aside aria-label="Quick commands" className="flex w-[248px] shrink-0 flex-col gap-1.5 overflow-y-auto rounded-xl border border-line bg-panel p-3 scroll-thin">
       <div className="flex items-center justify-between px-1 pb-1.5">
-        <PanelTitle>Comandos rápidos</PanelTitle>
+        <PanelTitle>Quick commands</PanelTitle>
         <div className="flex gap-1.5">
-          <IconButton label={editing ? "Terminar de editar" : "Editar comandos"} onClick={() => setEditing(!editing)} className="size-7 rounded-md">
+          <IconButton label={editing ? "Done editing" : "Edit commands"} onClick={() => setEditing(!editing)} className="size-7 rounded-md">
             {editing ? <CheckIcon size={14} /> : <PencilIcon size={14} />}
           </IconButton>
-          <IconButton label="Nuevo comando rápido" onClick={add} className="size-7 rounded-md">
+          <IconButton label="New quick command" onClick={add} className="size-7 rounded-md">
             <PlusIcon size={14} />
           </IconButton>
         </div>
@@ -39,7 +39,7 @@ export function QuickCommands({ commands, onChange, onRun }: Props) {
 
       {commands.length === 0 && (
         <p className="m-0 px-1 text-xs leading-relaxed text-muted">
-          Guarda aquí los comandos que envías a menudo. Se lanzan con un clic o con F1…F12.
+          Keep the commands you send often here. Run them with a click or F1…F12.
         </p>
       )}
 
@@ -48,13 +48,13 @@ export function QuickCommands({ commands, onChange, onRun }: Props) {
           <div key={c.id} className="flex flex-col gap-1.5 rounded-lg border border-line bg-raised p-2">
             <div className="flex gap-1.5">
               <input
-                aria-label="Nombre"
+                aria-label="Name"
                 value={c.name}
                 onChange={(e) => patch(c.id, { name: e.target.value })}
                 className={`${inputClass} font-medium`}
               />
               <IconButton
-                label={`Borrar ${c.name}`}
+                label={`Delete ${c.name}`}
                 onClick={() => onChange(commands.filter((x) => x.id !== c.id))}
                 className="size-8 shrink-0 rounded-md hover:text-err"
               >
@@ -62,8 +62,8 @@ export function QuickCommands({ commands, onChange, onRun }: Props) {
               </IconButton>
             </div>
             <input
-              aria-label="Comando"
-              placeholder="Comando a enviar"
+              aria-label="Command"
+              placeholder="Command to send"
               value={c.command}
               spellCheck={false}
               onChange={(e) => patch(c.id, { command: e.target.value })}
@@ -80,10 +80,10 @@ export function QuickCommands({ commands, onChange, onRun }: Props) {
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate font-medium">{c.name}</span>
-              <span className="truncate font-mono text-[11.5px] text-[#8e97a6]">{c.command || "(vacío)"}</span>
+              <span className="truncate font-mono text-[11.5px] text-muted">{c.command || "(empty)"}</span>
             </span>
             {i < 12 && (
-              <kbd className="rounded border border-[#2a303b] px-1.5 py-px font-mono text-[11px] text-muted">F{i + 1}</kbd>
+              <kbd className="rounded border border-line-input px-1.5 py-px font-mono text-[11px] text-muted">F{i + 1}</kbd>
             )}
           </button>
         ),

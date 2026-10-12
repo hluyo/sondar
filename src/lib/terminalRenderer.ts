@@ -1,18 +1,63 @@
-import { Terminal } from "@xterm/xterm";
+import { type ITheme, Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { LINE_ENDINGS, toHex } from "./encoding";
 import { clockTime, type StreamEvent } from "./stream";
+import type { Theme } from "./theme";
 
-const rgb = (hex: string) => {
-  const n = parseInt(hex.slice(1), 16);
-  return `\x1b[38;2;${n >> 16};${(n >> 8) & 255};${n & 255}m`;
-};
+// Palette colors (not true colors), so text already written follows a theme change.
 const RESET = "\x1b[0m";
-const DIM = rgb("#7a8392");
-const TX = rgb("#6cb6ff");
-const INFO = rgb("#9aa3b2");
-const ERROR = rgb("#ff7b7b");
+const DIM = "\x1b[90m";
+const TX = "\x1b[34m";
+const INFO = "\x1b[37m";
+const ERROR = "\x1b[31m";
+
+const BASE = { background: "#00000000", cursor: "#00000000", cursorAccent: "#00000000" };
+
+const THEMES: Record<Theme, ITheme> = {
+  dark: {
+    ...BASE,
+    foreground: "#e7eaee",
+    selectionBackground: "#2b4a6e",
+    black: "#1d222a",
+    red: "#ff7b7b",
+    green: "#3dd68c",
+    yellow: "#f5c451",
+    blue: "#6cb6ff",
+    magenta: "#c79bff",
+    cyan: "#4fd1c5",
+    white: "#c9cfd8",
+    brightBlack: "#7a8392",
+    brightRed: "#ff9d9d",
+    brightGreen: "#6ee7a8",
+    brightYellow: "#ffd97a",
+    brightBlue: "#9acbff",
+    brightMagenta: "#dcbcff",
+    brightCyan: "#7fe3d8",
+    brightWhite: "#ffffff",
+  },
+  light: {
+    ...BASE,
+    foreground: "#161a20",
+    selectionBackground: "#b6d4fb",
+    black: "#1d222a",
+    red: "#d93636",
+    green: "#1a7f4b",
+    yellow: "#9a6700",
+    blue: "#1f6fd1",
+    magenta: "#8250df",
+    cyan: "#0f7b8a",
+    white: "#5d6675",
+    brightBlack: "#7f8896",
+    brightRed: "#e5534b",
+    brightGreen: "#22a05e",
+    brightYellow: "#b7791f",
+    brightBlue: "#3b82f6",
+    brightMagenta: "#a371f7",
+    brightCyan: "#1b9aaa",
+    brightWhite: "#161a20",
+  },
+};
 const HEX_PER_LINE = 16;
 
 export type ViewMode = "ascii" | "hex";
@@ -40,7 +85,7 @@ export class TerminalRenderer {
   onPendingChange?: (lines: number) => void;
   onScrollChange?: (atBottom: boolean) => void;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, theme: Theme) {
     this.term = new Terminal({
       fontFamily: '"JetBrains Mono Variable", ui-monospace, monospace',
       fontSize: 13,
@@ -52,35 +97,17 @@ export class TerminalRenderer {
       cursorInactiveStyle: "none",
       cursorBlink: false,
       allowTransparency: true,
-      theme: {
-        background: "#00000000",
-        foreground: "#e7eaee",
-        cursor: "#00000000",
-        cursorAccent: "#00000000",
-        selectionBackground: "#2b4a6e",
-        black: "#1d222a",
-        red: "#ff7b7b",
-        green: "#3dd68c",
-        yellow: "#f5c451",
-        blue: "#6cb6ff",
-        magenta: "#c79bff",
-        cyan: "#4fd1c5",
-        white: "#c9cfd8",
-        brightBlack: "#7a8392",
-        brightRed: "#ff9d9d",
-        brightGreen: "#6ee7a8",
-        brightYellow: "#ffd97a",
-        brightBlue: "#9acbff",
-        brightMagenta: "#dcbcff",
-        brightCyan: "#7fe3d8",
-        brightWhite: "#ffffff",
-      },
+      theme: THEMES[theme],
     });
     this.term.loadAddon(this.fit);
     this.term.open(container);
     this.term.onScroll(() => this.reportScroll());
     this.term.onWriteParsed(() => this.reportScroll());
     this.resize();
+  }
+
+  setTheme(theme: Theme) {
+    this.term.options.theme = THEMES[theme];
   }
 
   resize() {

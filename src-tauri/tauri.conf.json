@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "FreeSerial",
+  "productName": "Sonda Serial",
   "version": "0.1.0",
-  "identifier": "io.github.freeserial",
+  "identifier": "io.github.sonda-serial",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "FreeSerial",
+        "title": "Sonda Serial",
         "width": 1360,
         "height": 860,
         "minWidth": 900,
