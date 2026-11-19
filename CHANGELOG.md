@@ -2,16 +2,14 @@
 
 All notable changes to Sondar are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). While the version starts with 0, Sondar is in beta and anything may change.
 
-## [Unreleased]
+## [0.2.0] - 2026-11-19
+
+Sondar now runs on Linux too. Nothing changes for Windows users apart from the new hints; install it over 0.1.x and your settings are kept.
 
 ### Added
 
-- **Linux packages**: `.deb` (Ubuntu, Debian, Mint 22.04 or newer), `.rpm` (Fedora, openSUSE) and `.AppImage` (any other distribution). The `.deb` and `.rpm` packages install udev rules so ST-LINK, FTDI, CH340 and CP210x boards open without joining the `dialout` group, and so ModemManager leaves them alone.
+- **Linux packages**: `.deb` (Ubuntu, Debian, Mint 22.04 or newer), `.rpm` (Fedora, openSUSE) and `.AppImage` (any other distribution). The `.deb` and `.rpm` packages install udev rules so ST-LINK, FTDI, CH340 and CP210x boards open without joining the `dialout` group, and so ModemManager leaves them alone. Systems with no language set (`LANG=C`) start in English.
 - Hints when a port does not open: what to do on *Permission denied* (Linux) and when another program has the port open.
-
-### Fixed
-
-- On a Linux system with no language set (`LANG=C`), the window stayed empty: the plot library rejected the system language `C` and the app did not start. Such languages now fall back to English, and POSIX names such as `es_ES.UTF-8` are understood.
 
 ### Changed
 
@@ -53,5 +51,6 @@ First public version (beta). Windows 10 and 11.
 - **Spanish and English** interface, and **light and dark** themes that follow Windows by default.
 - **Quick guide** with five steps, opened with the "?" button.
 
+[0.2.0]: ../../releases/tag/v0.2.0
 [0.1.1]: ../../releases/tag/v0.1.1
 [0.1.0]: ../../releases/tag/v0.1.0
