@@ -15,6 +15,7 @@ import { PlotStore } from "./lib/plotStore";
 import { PositionTracker } from "./lib/positionTracker";
 import { loadSavedRoute, type RouteData, saveRoute } from "./lib/routeData";
 import { RoutePlayer } from "./lib/routePlayer";
+import { RxFramer } from "./lib/rxFramer";
 import {
   closePort,
   frameLabel,
@@ -23,6 +24,7 @@ import {
   openPort,
   type OutputLines,
   type PortInfo,
+  setRxIdle,
   setSignals,
   writePort,
 } from "./lib/serial";
@@ -52,6 +54,8 @@ export default function App() {
   const [log, setLog] = useState<{ path: string; bytes: number } | null>(null);
 
   const bus = useMemo(() => new Emitter<StreamEvent>(), []);
+  // Received bytes come in chunks of any size; the framer turns them into whole entries.
+  const framer = useMemo(() => new RxFramer((entry) => bus.emit({ kind: "rx", ...entry })), [bus]);
   const plotStore = useMemo(() => new PlotStore(), []);
   const tracker = useMemo(() => new PositionTracker(), []);
   const countersRef = useRef({ rx: 0, tx: 0 });
@@ -69,13 +73,14 @@ export default function App() {
     const p = new RoutePlayer({
       send: async (bytes, lines) => {
         if (statusRef.current !== "connected") throw new Error(t("the port is closed"));
-        await writePort(bytes);
-        countersRef.current.tx += bytes.length;
+        // Into the stream before the write, so the answer can never be shown above it.
         const onlyGga = settingsRef.current.routeTxOnlyGga;
         const time = Date.now();
         for (const l of lines) {
           if (!onlyGga || l.isGga) bus.emit({ kind: "tx", text: l.text, bytes: l.bytes, ending: "crlf", time, note: l.note });
         }
+        await writePort(bytes);
+        countersRef.current.tx += bytes.length;
       },
       report: (level, text) => bus.emit({ kind: level, text, time: Date.now() }),
       onRestart: () => tracker.clear(),
@@ -103,9 +108,9 @@ export default function App() {
     () =>
       bus.on((e) => {
         if (e.kind === "rx") {
-          plotStore.pushBytes(e.bytes, e.time);
-          tracker.pushBytes(e.bytes, e.time);
-          player.pushBytes(e.bytes);
+          plotStore.pushLine(e.text, e.time / 1000);
+          tracker.pushLine(e.text, e.time);
+          player.pushLine(e.text);
         }
         logRef.current?.handle(e);
       }),
@@ -120,18 +125,19 @@ export default function App() {
         sim.stop();
         return;
       }
+      // Into the stream before the write, so the answer can never be shown above it.
+      const fault = frame.fault ?? (frame.garbage ? "garbage" : null);
+      bus.emit({
+        kind: "tx",
+        text: frame.text,
+        bytes: frame.bytes,
+        ending: "crlf",
+        time: frame.time,
+        note: fault ? `${t("simulated error")}: ${t(FAULT_LABELS[fault])}` : undefined,
+      });
       writePort(frame.bytes)
         .then(() => {
           countersRef.current.tx += frame.bytes.length;
-          const fault = frame.fault ?? (frame.garbage ? "garbage" : null);
-          bus.emit({
-            kind: "tx",
-            text: frame.text,
-            bytes: frame.bytes,
-            ending: "crlf",
-            time: frame.time,
-            note: fault ? `${t("simulated error")}: ${t(FAULT_LABELS[fault])}` : undefined,
-          });
         })
         .catch((e) => {
           sim.stop();
@@ -272,6 +278,7 @@ export default function App() {
       return;
     }
     const config = toPortConfig(s);
+    framer.flush();
     const id = ++generation.current;
     const retrying = statusRef.current === "reconnecting";
     if (!retrying) setStatus("connecting");
@@ -282,12 +289,15 @@ export default function App() {
         if (event.kind === "data") {
           const bytes = Uint8Array.from(event.bytes);
           countersRef.current.rx += bytes.length;
-          bus.emit({ kind: "rx", bytes, time: Date.now() });
+          framer.push(bytes, event.time);
+        } else if (event.kind === "idle") {
+          framer.idle();
         } else if (event.kind === "signals") {
           const { cts, dsr, cd, ri } = event;
           setInputs({ cts, dsr, cd, ri });
         } else if (event.reason) {
           // The port failed underneath us (cable pulled, board reset…).
+          framer.flush();
           generation.current++;
           setInputs(null);
           error(t("Connection lost: {reason}", { reason: event.reason }));
@@ -310,10 +320,11 @@ export default function App() {
       setStatus("disconnected");
       error(String(e));
     }
-  }, [bus, error, info]);
+  }, [framer, error, info]);
 
   const disconnect = useCallback(async () => {
     const wasConnected = statusRef.current === "connected";
+    framer.flush();
     generation.current++;
     setStatus("disconnected");
     setInputs(null);
@@ -322,7 +333,16 @@ export default function App() {
     } finally {
       info(wasConnected ? t("{port} closed", { port: settingsRef.current.port }) : t("Reconnect cancelled"));
     }
-  }, [info]);
+  }, [framer, info]);
+
+  // The idle timeout follows the setting and the baud rate (never shorter than 3 characters).
+  // The backend measures the silence; it gets the value on open and on every change.
+  const idleMs = toPortConfig(settings).rxIdleMs;
+  useEffect(() => {
+    framer.idleMs = idleMs;
+    if (statusRef.current === "connected") setRxIdle(idleMs).catch(() => {});
+  }, [framer, idleMs]);
+  useEffect(() => () => framer.flush(), [framer]);
 
   // Auto-reconnect: retry once a second while the device is missing.
   useEffect(() => {
@@ -344,10 +364,12 @@ export default function App() {
         return;
       }
       const bytes = encodeCommand(text, s.lineEnding);
+      // Into the stream (with the time it was sent) before the write, so the
+      // answer can never be shown above it. A failed write adds an error line below.
+      bus.emit({ kind: "tx", text, bytes, ending: s.lineEnding, time: Date.now() });
       try {
         await writePort(bytes);
         countersRef.current.tx += bytes.length;
-        bus.emit({ kind: "tx", text, bytes, ending: s.lineEnding, time: Date.now() });
       } catch (e) {
         error(t("Send failed: {e}", { e: String(e) }));
       }

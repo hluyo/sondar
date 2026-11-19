@@ -1,11 +1,16 @@
 import type { LineEnding } from "./encoding";
+import type { RxEnd } from "./rxFramer";
 
 /**
  * Everything that happens on the serial link, in order. The terminal and the
  * plot both subscribe to the same stream, which is what keeps them in sync.
+ *
+ * An `rx` event is one complete received entry (see `RxFramer`), never a piece
+ * of one. A `tx` event is emitted when the bytes are handed to the port, before
+ * the device can answer, so an answer always comes after what caused it.
  */
 export type StreamEvent =
-  | { kind: "rx"; bytes: Uint8Array; time: number }
+  | { kind: "rx"; bytes: Uint8Array; text: string; time: number; end: RxEnd }
   | { kind: "tx"; text: string; bytes: Uint8Array; ending: LineEnding; time: number; note?: string }
   | { kind: "info"; text: string; time: number }
   | { kind: "error"; text: string; time: number };

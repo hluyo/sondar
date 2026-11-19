@@ -65,8 +65,10 @@ const HEX_PER_LINE = 16;
 export type ViewMode = "ascii" | "hex";
 
 /**
- * Writes the serial stream into an xterm.js terminal. ANSI escape sequences
- * coming from the device are passed through, so colored logs just work.
+ * Writes the serial stream into an xterm.js terminal, one line per event. A
+ * received entry arrives complete (see `RxFramer`), so nothing else can land in
+ * the middle of it. ANSI escape sequences coming from the device are passed
+ * through, so colored logs just work.
  *
  * While paused, events are queued instead of written; resuming flushes them.
  * xterm.js already keeps the viewport still when the user scrolls up.
@@ -74,9 +76,6 @@ export type ViewMode = "ascii" | "hex";
 export class TerminalRenderer {
   readonly term: Terminal;
   private fit = new FitAddon();
-  private decoder = new TextDecoder();
-  private atLineStart = true;
-  private hexColumn = 0;
   private pending: StreamEvent[] = [];
   private pendingLines = 0;
   private paused = false;
@@ -132,7 +131,7 @@ export class TerminalRenderer {
   handle(event: StreamEvent) {
     if (this.paused) {
       this.pending.push(event);
-      this.pendingLines += event.kind === "rx" ? countNewlines(event.bytes) : 1;
+      this.pendingLines++;
       this.onPendingChange?.(this.pendingLines);
       return;
     }
@@ -155,15 +154,11 @@ export class TerminalRenderer {
   }
 
   setMode(mode: ViewMode) {
-    if (mode === this.mode) return;
-    this.term.write(this.breakLine());
     this.mode = mode;
   }
 
   clear() {
     this.term.reset();
-    this.atLineStart = true;
-    this.hexColumn = 0;
     this.pending = [];
     this.pendingLines = 0;
     this.onPendingChange?.(0);
@@ -176,70 +171,37 @@ export class TerminalRenderer {
     return clock + badge;
   }
 
-  /** Newline only if the cursor is not already at the start of a line. */
-  private breakLine() {
-    const needed = !this.atLineStart || this.hexColumn > 0;
-    this.atLineStart = true;
-    this.hexColumn = 0;
-    return needed ? "\n" : "";
+  /** Blank space as wide as the prefix, for the continuation lines of a long HEX entry. */
+  private indent() {
+    return " ".repeat((this.timestamps ? 14 : 0) + 4);
   }
 
   private render(event: StreamEvent): string {
     switch (event.kind) {
       case "rx":
-        return this.mode === "hex" ? this.renderHex(event.bytes, event.time) : this.renderText(event.bytes, event.time);
+        return this.mode === "hex" ? this.renderHex(event.bytes, event.time) : `${this.prefix(event.time, "rx")}${event.text}${RESET}\n`;
       case "tx": {
         if (!this.echo) return "";
         const ending = LINE_ENDINGS.find((e) => e.id === event.ending)?.escaped ?? "";
         const body = this.mode === "hex" ? toHex(event.bytes) : `${event.text}${DIM}  ${ending}`;
         const note = event.note ? `${WARN}  « ${event.note}` : "";
-        return `${this.breakLine()}${this.prefix(event.time, "tx")}${TX}${body}${note}${RESET}\n`;
+        return `${this.prefix(event.time, "tx")}${TX}${body}${note}${RESET}\n`;
       }
       case "info":
-        return `${this.breakLine()}${this.prefix(event.time, "none")}${INFO}── ${event.text} ──${RESET}\n`;
+        return `${this.prefix(event.time, "none")}${INFO}── ${event.text} ──${RESET}\n`;
       case "error":
-        return `${this.breakLine()}${this.prefix(event.time, "none")}${ERROR}${event.text}${RESET}\n`;
+        return `${this.prefix(event.time, "none")}${ERROR}${event.text}${RESET}\n`;
     }
   }
 
-  private renderText(bytes: Uint8Array, time: number) {
-    const text = this.decoder.decode(bytes, { stream: true });
-    let out = "";
-    const lines = text.split("\n");
-    lines.forEach((part, i) => {
-      if (i > 0) {
-        out += "\n";
-        this.atLineStart = true;
-      }
-      if (!part) return;
-      if (this.atLineStart) {
-        out += this.prefix(time, "rx");
-        this.atLineStart = false;
-      }
-      out += part;
-    });
-    return out;
-  }
-
+  /** One entry, 16 bytes per row; line endings dimmed. */
   private renderHex(bytes: Uint8Array, time: number) {
     let out = "";
-    for (const b of bytes) {
-      if (this.hexColumn === 0) out += this.prefix(time, "rx");
+    bytes.forEach((b, i) => {
+      if (i % HEX_PER_LINE === 0) out += i === 0 ? this.prefix(time, "rx") : `\n${this.indent()}`;
       const hex = b.toString(16).toUpperCase().padStart(2, "0");
       out += b === 0x0a || b === 0x0d ? `${DIM}${hex}${RESET} ` : `${hex} `;
-      this.hexColumn++;
-      if (b === 0x0a || this.hexColumn === HEX_PER_LINE) {
-        out += "\n";
-        this.hexColumn = 0;
-      }
-    }
-    this.atLineStart = this.hexColumn === 0;
-    return out;
+    });
+    return `${out}\n`;
   }
-}
-
-function countNewlines(bytes: Uint8Array) {
-  let n = 0;
-  for (const b of bytes) if (b === 0x0a) n++;
-  return n;
 }

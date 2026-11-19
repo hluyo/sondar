@@ -39,6 +39,8 @@
 ## Quick start
 
 1. **Download and install.** Get the installer (`Sondar_x.y.z_x64-setup.exe`) from the [Releases page](../../releases/latest) and run it. Sondar then opens from the Start menu like any other app.
+   > **Nothing else to install.** The installer contains the whole app. Node.js, Rust and the other tools in this repository are only needed to [build Sondar from source](#development).
+   >
    > The installer is not code-signed yet. If Windows SmartScreen says *"Windows protected your PC"*, click **More info → Run anyway**.
 2. **Plug in your board** with its USB cable. ST Nucleo and Discovery boards show up as **ST-LINK**.
 3. **Press Connect.** Everything the board sends appears under **Received**.
@@ -250,7 +252,7 @@ The **?** button opens this five-step guide at any time. You can also hover over
 | Problem | What to try |
 |---|---|
 | **My board is not in the Port list** | Try another USB cable (some only carry power) and another USB port. Install the driver for your USB-serial chip: ST-LINK (ST boards), CH340, CP210x or FTDI. In Windows *Device Manager → Ports (COM & LPT)*, the board should appear with its COM number. |
-| **"Access denied" or "port busy" when connecting** | Another program has the port open: STM32CubeIDE, the Arduino IDE serial monitor, PuTTY or another copy of Sondar. Close it and connect again. |
+| **"Access denied" or "port busy" when connecting** | Another program has the port open: STM32CubeIDE, the Arduino IDE serial monitor, PuTTY or another instance of Sondar. Close it and connect again. |
 | **Strange characters (`�`, `ÿ`…)** | The speed or the frame does not match the firmware. Check the baud rate (115200 is the most common) and the frame (usually 8N1). |
 | **Nothing arrives** | Check that the board is actually sending, that TX and RX are crossed if you use a USB-serial adapter (board TX → adapter RX), and that the grounds are connected. Switch to **HEX** to see bytes that are not printable. |
 | **Lines stick together or never end** | The firmware is not sending a line ending. Have it end each line with `\r\n` (or at least `\n`). |
@@ -263,6 +265,8 @@ The **?** button opens this five-step guide at any time. You can also hover over
 Sondar is in **beta** (version 0.x): it works and is used with real boards, but things may still change. It is tested on Windows 10 and 11 with ST Nucleo boards. See the [changelog](CHANGELOG.md) for what each version brings. The same code builds for macOS and Linux, but those builds are not tested yet. Bug reports and ideas are welcome in [Issues](../../issues).
 
 ## Development
+
+Only needed to build Sondar from source; to use it, download the [installer](../../releases/latest).
 
 Requirements: [Node.js](https://nodejs.org/) 20+, [Rust](https://rustup.rs/) (stable) and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (on Windows: Microsoft C++ Build Tools and WebView2).
 

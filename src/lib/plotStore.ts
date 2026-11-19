@@ -29,17 +29,8 @@ export class PlotStore {
   layoutVersion = 0;
 
   private index = new Map<string, number>();
-  private decoder = new TextDecoder();
-  private partial = "";
 
-  pushBytes(bytes: Uint8Array, timeMs: number) {
-    const text = this.partial + this.decoder.decode(bytes, { stream: true });
-    const lines = text.split("\n");
-    this.partial = lines.pop() ?? "";
-    if (this.partial.length > 4096) this.partial = "";
-    for (const line of lines) this.pushLine(line, timeMs / 1000);
-  }
-
+  /** One received line; `t` in seconds. */
   pushLine(line: string, t: number) {
     const values = parseLine(line);
     if (!values) return;
@@ -86,7 +77,6 @@ export class PlotStore {
     this.x = [];
     this.ys = [];
     this.index.clear();
-    this.partial = "";
     this.version++;
     this.layoutVersion++;
   }

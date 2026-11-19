@@ -2,7 +2,6 @@ import { logStart, logStop, logWrite, fileStamp } from "./files";
 import { clockTime, type StreamEvent } from "./stream";
 
 const FLUSH_MS = 500;
-const MAX_PARTIAL = 4096;
 const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 /**
@@ -12,13 +11,10 @@ const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
  *   15:30:02.161  RX  T=23.6 H=41.2
  *   15:30:05.002  --  COM8 closed
  *
- * Received bytes are split into lines here (each line keeps the time its first
- * byte arrived) and writes are batched to the backend every FLUSH_MS.
+ * Each received entry is one line, with the time its first byte arrived.
+ * Writes are batched to the backend every FLUSH_MS.
  */
 export class SessionLog {
-  private decoder = new TextDecoder();
-  private partial = "";
-  private partialTime = 0;
   private buffer = "";
   private timer: number;
   private failed = false;
@@ -41,18 +37,9 @@ export class SessionLog {
 
   handle(event: StreamEvent) {
     switch (event.kind) {
-      case "rx": {
-        const parts = this.decoder.decode(event.bytes, { stream: true }).split("\n");
-        parts.forEach((part, i) => {
-          if (!this.partial) this.partialTime = event.time;
-          this.partial += part;
-          if (i < parts.length - 1 || this.partial.length > MAX_PARTIAL) {
-            this.line(this.partialTime, "RX", this.partial);
-            this.partial = "";
-          }
-        });
+      case "rx":
+        this.line(event.time, "RX", event.text);
         break;
-      }
       case "tx":
         this.line(event.time, "TX", event.note ? `${event.text}  « ${event.note}` : event.text);
         break;
@@ -67,8 +54,6 @@ export class SessionLog {
 
   async stop() {
     window.clearInterval(this.timer);
-    if (this.partial) this.line(this.partialTime, "RX", this.partial);
-    this.partial = "";
     await this.flush();
     await logStop();
   }
