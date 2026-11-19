@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="../../releases/latest"><b>Download for Windows</b></a> ·
+  <a href="../../releases/latest"><b>Download for Windows and Linux</b></a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#a-tour-of-sondar">Tour</a> ·
   <a href="#troubleshooting">Troubleshooting</a> ·
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img alt="Platform: Windows 10 and 11" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0067c0">
+  <img alt="Platform: Windows 10 and 11, Linux" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20%7C%20Linux-0067c0">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2ea44f">
   <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-f0a020">
 </p>
@@ -42,6 +42,16 @@
    > **Nothing else to install.** The installer contains the whole app. Node.js, Rust and the other tools in this repository are only needed to [build Sondar from source](#development).
    >
    > The installer is not code-signed yet. If Windows SmartScreen says *"Windows protected your PC"*, click **More info → Run anyway**.
+
+   **On Linux**, pick the package for your system from the same page:
+
+   | System | File | Install |
+   |---|---|---|
+   | Ubuntu, Debian, Mint (22.04 or newer) | `Sondar_x.y.z_amd64.deb` | `sudo apt install ./Sondar_x.y.z_amd64.deb` |
+   | Fedora, openSUSE | `Sondar-x.y.z-1.x86_64.rpm` | `sudo dnf install ./Sondar-x.y.z-1.x86_64.rpm` |
+   | Any other | `Sondar_x.y.z_amd64.AppImage` | `chmod +x Sondar_*.AppImage` and run it |
+
+   The `.deb` and `.rpm` packages also let you open ST-LINK, FTDI, CH340 and CP210x boards without extra permissions. With the AppImage, see [Troubleshooting](#troubleshooting) if the port says *Permission denied*.
 2. **Plug in your board** with its USB cable. ST Nucleo and Discovery boards show up as **ST-LINK**.
 3. **Press Connect.** Everything the board sends appears under **Received**.
 
@@ -243,16 +253,20 @@ The **?** button opens this five-step guide at any time. You can also hover over
 
 | What | Where |
 |---|---|
-| Session logs (*Save log*) | `Documents\Sondar\logs` |
+| Session logs (*Save log*) | `Documents\Sondar\logs` (on Linux, `~/Documents/Sondar/logs` or your language's Documents folder) |
 | Exported plots and routes (CSV, GPX) | `Documents\Sondar\exports` |
-| Settings, quick commands, last route | Your Windows user profile. The installer does not ship any of them, so every user starts clean. |
+| Settings, quick commands, last route | Your user profile. The installer does not ship any of them, so every user starts clean. |
 
 ## Troubleshooting
 
 | Problem | What to try |
 |---|---|
 | **My board is not in the Port list** | Try another USB cable (some only carry power) and another USB port. Install the driver for your USB-serial chip: ST-LINK (ST boards), CH340, CP210x or FTDI. In Windows *Device Manager → Ports (COM & LPT)*, the board should appear with its COM number. |
+| **My board is not in the Port list (Linux)** | Boards show up as `/dev/ttyACM0` (ST-LINK and most boards with native USB) or `/dev/ttyUSB0` (FTDI, CH340, CP210x adapters). Run `ls /dev/ttyACM* /dev/ttyUSB*` before and after plugging it in to see which one is yours. |
 | **"Access denied" or "port busy" when connecting** | Another program has the port open: STM32CubeIDE, the Arduino IDE serial monitor, PuTTY or another instance of Sondar. Close it and connect again. |
+| **"Permission denied" when connecting (Linux)** | Your user may not open serial ports yet. Install Sondar from the `.deb` or `.rpm` package, which gives access to ST-LINK, FTDI, CH340 and CP210x boards, or run `sudo usermod -aG dialout $USER` (`uucp` on Arch), then log out and back in. |
+| **The board answers garbage for a few seconds after plugging it in (Linux)** | ModemManager is probing it as if it were a modem. The `.deb` and `.rpm` packages tell it to leave USB-serial boards alone; with the AppImage, wait a few seconds or run `sudo systemctl disable --now ModemManager` if you don't use a mobile modem. |
+| **Blank window (Linux)** | Sondar already turns off WebKitGTK's DMA-BUF renderer, which causes this with some graphics drivers. If it persists, start it with `WEBKIT_DISABLE_COMPOSITING_MODE=1` and report it in [Issues](../../issues). |
 | **Strange characters (`�`, `ÿ`…)** | The speed or the frame does not match the firmware. Check the baud rate (115200 is the most common) and the frame (usually 8N1). |
 | **Nothing arrives** | Check that the board is actually sending, that TX and RX are crossed if you use a USB-serial adapter (board TX → adapter RX), and that the grounds are connected. Switch to **HEX** to see bytes that are not printable. |
 | **Lines stick together or never end** | The firmware is not sending a line ending. Have it end each line with `\r\n` (or at least `\n`). |
@@ -262,19 +276,22 @@ The **?** button opens this five-step guide at any time. You can also hover over
 
 ## Status
 
-Sondar is in **beta** (version 0.x): it works and is used with real boards, but things may still change. It is tested on Windows 10 and 11 with ST Nucleo boards. See the [changelog](CHANGELOG.md) for what each version brings. The same code builds for macOS and Linux, but those builds are not tested yet. Bug reports and ideas are welcome in [Issues](../../issues).
+Sondar is in **beta** (version 0.x): it works and is used with real boards, but things may still change. It is tested on Windows 10 and 11 with ST Nucleo boards. Linux support is new in 0.2.0: it is tested on Ubuntu 26.04 with a Nucleo board, and the packages are built on Ubuntu 22.04 so they install on that version and newer. Reports from other distributions are very welcome. See the [changelog](CHANGELOG.md) for what each version brings. The same code builds for macOS, but that build is not tested yet. Bug reports and ideas are welcome in [Issues](../../issues).
 
 ## Development
 
 Only needed to build Sondar from source; to use it, download the [installer](../../releases/latest).
 
-Requirements: [Node.js](https://nodejs.org/) 20+, [Rust](https://rustup.rs/) (stable) and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (on Windows: Microsoft C++ Build Tools and WebView2).
+Requirements: [Node.js](https://nodejs.org/) 20+, [Rust](https://rustup.rs/) (stable) and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (on Windows: Microsoft C++ Build Tools and WebView2; on Ubuntu: `libwebkit2gtk-4.1-dev`, `libudev-dev` and the rest of the list in [`.github/actions/linux-setup`](.github/actions/linux-setup/action.yml)).
 
 ```sh
 npm install
 npm run tauri dev      # run the app with hot reload
-npm run tauri build    # build the installers (src-tauri/target/release/bundle/: NSIS .exe and .msi)
+npm run tauri build    # build the installers in src-tauri/target/release/bundle/
+                       # (Windows: NSIS .exe and .msi; Linux: .deb, .rpm and .AppImage)
 ```
+
+Every push runs the checks and builds the Linux packages on GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)). When a release is published, [`release-linux.yml`](.github/workflows/release-linux.yml) builds the Linux packages from its tag and attaches them to it.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is organized and [CONTRIBUTING.md](CONTRIBUTING.md) to get involved.
 

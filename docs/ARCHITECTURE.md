@@ -38,6 +38,7 @@ Sondar is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the seri
 - `lib/files.ts`: typed wrappers for the file commands.
 - `lib/settings.ts`: settings persisted in `localStorage`.
 - `lib/i18n.ts` and `lib/i18n.es.ts`: translations. `t("English text", vars)` looks the English string up in the Spanish dictionary, so a missing entry simply shows English; `{name}` placeholders are filled from `vars`. The language follows the system (`auto`) or the user's choice; App sets it on every render before its children render, and also uses it for the window title.
+- `lib/localeGuard.ts`: imported first in `main.tsx`. On Linux, WebKitGTK reports the system locale as is, and with no locale set (`LANG=C`) `navigator.language` is `"C"`, which is not a valid language tag: uPlot passes it to `Intl.NumberFormat` when it loads and the app would not start. The guard replaces such values with a valid tag (`C`/`POSIX` → `en-US`, `es_ES.UTF-8` → `es-ES`) before any other module runs.
 - `lib/theme.ts`: resolves the light/dark preference (or the OS setting) and sets `data-theme` on the root element. Colors are CSS tokens in `index.css`; light mode redefines the same tokens. The terminal and the plot get the theme explicitly, since xterm.js and uPlot take colors from JavaScript. The tokens follow Windows 11's Fluent look: system fonts (Segoe UI Variable, Cascadia Mono, with system fallbacks elsewhere), 4 px controls and 8 px cards, and Windows' accent blue; the terminal uses Windows Terminal's Campbell palette.
 - `lib/nmea.ts`: builds and parses NMEA GGA sentences (checksum, degrees ↔ ddmm.mmmm).
 - `lib/gpsSimulator.ts`: `GpsSimulator`, a timer that builds GGA sentences along a track (fixed, circle, line), applies fault injection and hands each frame to a `send` callback. App writes the frame to the port and emits it as a `tx` event (with a `note` when a fault was injected), so it appears in the terminal and the log. The simulator lives in App, not in its panel, so it keeps sending while another tab is shown, and it stops when the port closes.
@@ -60,4 +61,11 @@ The app works offline except for the map tiles, which are loaded from `tile.open
 
 ## Packaging
 
-`npm run tauri build` produces the Windows installers (NSIS `.exe` and `.msi`) in `src-tauri/target/release/bundle/`. The app has no runtime dependencies beyond WebView2, which ships with Windows 10/11.
+`npm run tauri build` produces the installers for the OS it runs on in `src-tauri/target/release/bundle/`:
+
+- **Windows**: NSIS `.exe` and `.msi`. The app has no runtime dependencies beyond WebView2, which ships with Windows 10/11.
+- **Linux**: `.deb`, `.rpm` and `.AppImage`, built on Ubuntu 22.04 so they run on that release and newer (glibc and WebKitGTK 4.1). The `.deb` and `.rpm` packages install `src-tauri/linux/60-sondar.rules` in `/usr/lib/udev/rules.d/` and run `reload-udev.sh` after installing or removing. The rules tag the usual USB-serial chips (ST-LINK, FTDI, CH340, CP210x) with `uaccess`, so the user logged in at the computer can open them without the `dialout` group, and set `ID_MM_DEVICE_IGNORE` so ModemManager does not probe them. The AppImage cannot install system files; its users need the `dialout` group (the app explains this when the port says *Permission denied*).
+
+Linux specifics in the code: `list_ports` hides `/dev/ttyS*` ports with no device behind them, and `lib.rs` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` (unless already set) because WebKitGTK's DMA-BUF renderer shows a blank window with some GPU drivers.
+
+GitHub Actions: `ci.yml` runs the checks (types, tests, build, rustfmt, clippy) and builds the Linux packages on every push, and `release-linux.yml` builds them from a release's tag when it is published and attaches them to it. The Windows installers are built and attached by hand. Both workflows share the setup in `.github/actions/linux-setup`.

@@ -1,4 +1,20 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { t } from "./i18n";
+
+const IS_LINUX = typeof navigator !== "undefined" && /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
+
+/** What to do about the usual errors when opening a port, or null. */
+export function openErrorHint(message: string): string | null {
+  if (IS_LINUX && /permission denied/i.test(message)) {
+    return t(
+      "Linux does not let your user open this port. Install Sondar from the .deb or .rpm package, which gives access to the usual USB-serial boards, or run “sudo usermod -aG dialout $USER” (uucp on Arch), then log out and back in.",
+    );
+  }
+  if (/busy|access is denied|acceso denegado/i.test(message)) {
+    return t("Another program has the port open (STM32CubeIDE, the Arduino serial monitor, PuTTY, another Sondar…). Close it and connect again.");
+  }
+  return null;
+}
 
 export interface PortInfo {
   name: string;
