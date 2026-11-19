@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "feature/**", "bugfix/**", "release/**", "hotfix/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (types, tests, lint)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-setup
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+      - run: cargo fmt --check
+        working-directory: src-tauri
+      - run: cargo clippy -- -D warnings
+        working-directory: src-tauri
+
+  linux-packages:
+    name: Linux packages
+    needs: checks
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/linux-setup
+      - run: npm run tauri build -- --bundles deb,rpm,appimage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sondar-linux
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error

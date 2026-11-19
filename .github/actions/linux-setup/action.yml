@@ -1,0 +1,27 @@
+name: Linux build setup
+description: System libraries, Node and Rust for building Sondar on Ubuntu.
+
+runs:
+  using: composite
+  steps:
+    - name: System libraries (WebKitGTK, udev…)
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential pkg-config file patchelf \
+          libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+          libxdo-dev libssl-dev libudev-dev
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: src-tauri
+    - name: npm ci
+      shell: bash
+      run: npm ci

@@ -122,6 +122,9 @@ pub struct SerialState(Mutex<Option<Connection>>);
 #[tauri::command]
 pub fn list_ports() -> Result<Vec<PortInfo>, String> {
     let mut ports = serialport::available_ports().map_err(|e| e.to_string())?;
+    // Linux lists the legacy on-board UARTs (/dev/ttyS0…31) even when nothing is
+    // behind them; they would bury the real board at the bottom of the list.
+    ports.retain(|p| !is_legacy_linux_port(&p.port_name, &p.port_type));
     ports.sort_by_key(|p| natural_key(&p.port_name));
     Ok(ports
         .into_iter()
@@ -141,6 +144,12 @@ pub fn list_ports() -> Result<Vec<PortInfo>, String> {
             }
         })
         .collect())
+}
+
+fn is_legacy_linux_port(name: &str, port_type: &SerialPortType) -> bool {
+    cfg!(target_os = "linux")
+        && name.starts_with("/dev/ttyS")
+        && matches!(port_type, SerialPortType::Unknown)
 }
 
 /// Sort key so that COM10 comes after COM9.

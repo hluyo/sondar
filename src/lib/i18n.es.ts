@@ -20,6 +20,10 @@ export const ES: Record<string, string> = {
   "Reconnect cancelled": "Reconexión cancelada",
   "Not sent (port closed): {text}": "No enviado (puerto cerrado): {text}",
   "Send failed: {e}": "Falló el envío: {e}",
+  "Linux does not let your user open this port. Install Sondar from the .deb or .rpm package, which gives access to the usual USB-serial boards, or run “sudo usermod -aG dialout $USER” (uucp on Arch), then log out and back in.":
+    "Linux no deja a tu usuario abrir este puerto. Instala Sondar con el paquete .deb o .rpm, que da acceso a las placas USB-serie habituales, o ejecuta «sudo usermod -aG dialout $USER» (uucp en Arch) y vuelve a iniciar sesión.",
+  "Another program has the port open (STM32CubeIDE, the Arduino serial monitor, PuTTY, another Sondar…). Close it and connect again.":
+    "Otro programa tiene el puerto abierto (STM32CubeIDE, el monitor serie de Arduino, PuTTY, otro Sondar…). Ciérralo y vuelve a conectar.",
   on: "activado",
   off: "desactivado",
   "Could not set {line}: {e}": "No se pudo cambiar {line}: {e}",

@@ -14,6 +14,7 @@ Thanks for your interest! Bug reports, ideas and pull requests are welcome.
 - `npm test` passes (unit tests with [Vitest](https://vitest.dev/), next to the code as `*.test.ts`). On Windows, run it from a path that starts with an uppercase drive letter (`C:\…`): with `c:\…` Vitest can load itself twice and fail with "failed to find the runner".
 - `cargo clippy` and `cargo fmt --check` pass inside `src-tauri/`.
 - The change was tried against a real serial device when it touches the serial path.
+- The CI checks pass on GitHub (they run the same commands on Ubuntu and build the Linux packages).
 - One topic per pull request, with a short description of what and why.
 
 ## Reporting bugs

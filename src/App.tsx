@@ -21,6 +21,7 @@ import {
   frameLabel,
   type InputLines,
   listPorts,
+  openErrorHint,
   openPort,
   type OutputLines,
   type PortInfo,
@@ -319,6 +320,8 @@ export default function App() {
       if (retrying) return; // keep waiting quietly
       setStatus("disconnected");
       error(String(e));
+      const hint = openErrorHint(String(e));
+      if (hint) error(hint);
     }
   }, [framer, error, info]);
 
