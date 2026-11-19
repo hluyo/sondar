@@ -2,7 +2,9 @@
 
 All notable changes to Sondar are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). While the version starts with 0, Sondar is in beta and anything may change.
 
-## [Unreleased]
+## [0.1.1] - 2026-11-19
+
+Bug fixes for the terminal. Install it over 0.1.0: your settings and quick commands are kept.
 
 ### Fixed
 
@@ -13,6 +15,10 @@ All notable changes to Sondar are listed here. The format follows [Keep a Change
 ### Added
 
 - **More settings → End a received line after … ms without data** (30 ms by default; 0 = only at CR or LF), for exercises that send fixed-length messages with no line ending.
+
+### Changed
+
+- README: the quick start now says that the installer is all you need (Node.js and the other development tools are only for building Sondar from source).
 
 ## [0.1.0] - 2026-10-12
 
@@ -31,4 +37,5 @@ First public version (beta). Windows 10 and 11.
 - **Spanish and English** interface, and **light and dark** themes that follow Windows by default.
 - **Quick guide** with five steps, opened with the "?" button.
 
+[0.1.1]: ../../releases/tag/v0.1.1
 [0.1.0]: ../../releases/tag/v0.1.0
