@@ -1,0 +1,14 @@
+# Installed by the Sondar .deb and .rpm packages.
+#
+# Lets the user logged in at the computer open common USB-serial adapters
+# without joining the dialout (or uucp) group, and keeps ModemManager from
+# probing them with AT commands when they are plugged in.
+
+# STMicroelectronics: ST-LINK virtual COM port (Nucleo and Discovery boards)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+# FTDI (FT232, FT2232…)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+# WCH CH340 / CH341
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"
+# Silicon Labs CP210x
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1"

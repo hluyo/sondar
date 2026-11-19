@@ -2,6 +2,22 @@
 
 All notable changes to Sondar are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). While the version starts with 0, Sondar is in beta and anything may change.
 
+## [Unreleased]
+
+### Added
+
+- **Linux packages**: `.deb` (Ubuntu, Debian, Mint 22.04 or newer), `.rpm` (Fedora, openSUSE) and `.AppImage` (any other distribution). The `.deb` and `.rpm` packages install udev rules so ST-LINK, FTDI, CH340 and CP210x boards open without joining the `dialout` group, and so ModemManager leaves them alone.
+- Hints when a port does not open: what to do on *Permission denied* (Linux) and when another program has the port open.
+
+### Fixed
+
+- On a Linux system with no language set (`LANG=C`), the window stayed empty: the plot library rejected the system language `C` and the app did not start. Such languages now fall back to English, and POSIX names such as `es_ES.UTF-8` are understood.
+
+### Changed
+
+- On Linux, the port list hides the legacy `/dev/ttyS*` ports that have nothing behind them.
+- Checks and Linux builds run on GitHub Actions for every push; publishing a release attaches the Linux packages to it.
+
 ## [0.1.1] - 2026-11-19
 
 Bug fixes for the terminal. Install it over 0.1.0: your settings and quick commands are kept.

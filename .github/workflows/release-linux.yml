@@ -1,0 +1,37 @@
+name: Linux packages for a release
+
+# When a release is published on GitHub, build the Linux packages from its tag
+# and attach them to it, next to the Windows installers.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and attach the packages to (e.g. v0.2.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: ./.github/actions/linux-setup
+      - run: npm test
+      - run: npm run tauri build -- --bundles deb,rpm,appimage
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd src-tauri/target/release/bundle
+          cp deb/*.deb rpm/*.rpm appimage/*.AppImage .
+          sha256sum *.deb *.rpm *.AppImage > SHA256SUMS-linux.txt
+          cat SHA256SUMS-linux.txt
+          gh release upload "$TAG" --clobber *.deb *.rpm *.AppImage SHA256SUMS-linux.txt
