@@ -126,8 +126,6 @@ export class RoutePlayer {
   private timer: number | null = null;
   private windowTimer: number | null = null;
   private open: BurstResult | null = null;
-  private decoder = new TextDecoder();
-  private partial = "";
 
   constructor(private hooks: PlayerHooks) {}
 
@@ -222,13 +220,9 @@ export class RoutePlayer {
     };
   }
 
-  /** Received bytes from the device, split into lines. */
-  pushBytes(bytes: Uint8Array) {
-    const text = this.partial + this.decoder.decode(bytes, { stream: true });
-    const parts = text.split("\n");
-    this.partial = parts.pop() ?? "";
-    if (this.partial.length > 4096) this.partial = "";
-    for (const line of parts) this.onLine(line.trim());
+  /** One line received from the device. */
+  pushLine(line: string) {
+    this.onLine(line.trim());
   }
 
   private onLine(text: string) {

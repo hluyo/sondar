@@ -29,17 +29,7 @@ export class PositionTracker {
   /** Bumps on every change. */
   version = 0;
 
-  private decoder = new TextDecoder();
-  private partial = "";
-
-  pushBytes(bytes: Uint8Array, time: number) {
-    const text = this.partial + this.decoder.decode(bytes, { stream: true });
-    const lines = text.split("\n");
-    this.partial = lines.pop() ?? "";
-    if (this.partial.length > 4096) this.partial = "";
-    for (const line of lines) this.pushLine(line, time);
-  }
-
+  /** One received line; `time` in ms. */
   pushLine(line: string, time: number) {
     const pos = POS.exec(line);
     if (pos) {
@@ -64,7 +54,6 @@ export class PositionTracker {
     this.last = null;
     this.trail = [];
     this.signal = null;
-    this.partial = "";
     this.version++;
   }
 
