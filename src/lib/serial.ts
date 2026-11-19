@@ -15,6 +15,8 @@ export interface PortConfig {
   parity: Parity;
   stopBits: 1 | 2;
   flowControl: FlowControl;
+  /** Silence in ms after received bytes that sends an `idle` event; 0 = off. */
+  rxIdleMs: number;
 }
 
 /** Input control lines driven by the device. */
@@ -32,7 +34,10 @@ export interface OutputLines {
 }
 
 export type SerialEvent =
-  | { kind: "data"; bytes: number[] }
+  /** `time`: when the first of these bytes was read (ms since the epoch). */
+  | { kind: "data"; bytes: number[]; time: number }
+  /** The line was silent for `rxIdleMs` after the last bytes, measured where they are read. */
+  | { kind: "idle" }
   | ({ kind: "signals" } & InputLines)
   | { kind: "closed"; reason: string | null };
 
@@ -49,6 +54,9 @@ export const closePort = () => invoke<void>("close_port");
 export const writePort = (data: Uint8Array) => invoke<void>("write_port", { data: Array.from(data) });
 
 export const setSignals = (lines: Partial<OutputLines>) => invoke<void>("set_signals", lines);
+
+/** Changes the idle timeout of the open port. */
+export const setRxIdle = (ms: number) => invoke<void>("set_rx_idle", { ms });
 
 /** "8N1", "7E1"… */
 export function frameLabel(c: Pick<PortConfig, "dataBits" | "parity" | "stopBits">) {

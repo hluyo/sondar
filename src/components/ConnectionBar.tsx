@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type Language, t } from "../lib/i18n";
 import { frameLabel, type InputLines, type OutputLines, type PortInfo } from "../lib/serial";
+import { MAX_RX_IDLE_MS } from "../lib/rxFramer";
 import type { Settings } from "../lib/settings";
 import { formatDuration } from "../lib/stream";
 import type { Theme } from "../lib/theme";
@@ -236,6 +237,7 @@ function MoreSettings(props: Props & { focusCustomBaud: boolean; onClose: () => 
   const baudInput = useRef<HTMLInputElement>(null);
   const [baudText, setBaudText] = useState(BAUD_RATES.includes(settings.baudRate) ? "" : String(settings.baudRate));
   const [confirmReset, setConfirmReset] = useState(false);
+  const [idleText, setIdleText] = useState(String(settings.rxIdleMs));
   const locked = status === "connected" || status === "connecting";
   const connected = status === "connected";
 
@@ -348,6 +350,29 @@ function MoreSettings(props: Props & { focusCustomBaud: boolean; onClose: () => 
           <span className="text-xs text-muted">{t("If the board is unplugged, wait for it and connect again")}</span>
         </span>
         <Switch on={settings.autoReconnect} label={t("Auto-reconnect")} onClick={() => update({ autoReconnect: !settings.autoReconnect })} />
+      </div>
+
+      <div className={`${row} border-b border-line`}>
+        <label htmlFor="rx-idle" className="flex flex-col">
+          <span className="text-sm">{t("End a received line after")}</span>
+          <span className="text-xs text-muted">{t("For messages with no line ending. 0 = only at CR or LF")}</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="rx-idle"
+            value={idleText}
+            inputMode="numeric"
+            onChange={(e) => {
+              const text = e.target.value.replace(/\D/g, "").slice(0, 4);
+              setIdleText(text);
+              const ms = Number(text);
+              if (text && ms <= MAX_RX_IDLE_MS) update({ rxIdleMs: ms });
+            }}
+            onBlur={() => setIdleText(String(settings.rxIdleMs))}
+            className="h-8 w-16 rounded-md border border-line-strong border-b-line-focus bg-raised px-2.5 text-right font-mono text-sm text-fg outline-none focus:border-b-accent"
+          />
+          <span className="text-xs text-muted">{t("ms without data")}</span>
+        </div>
       </div>
 
       <div className={`${row} border-b border-line`}>

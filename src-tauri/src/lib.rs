@@ -12,6 +12,7 @@ pub fn run() {
             serial::close_port,
             serial::write_port,
             serial::set_signals,
+            serial::set_rx_idle,
             files::log_start,
             files::log_write,
             files::log_stop,

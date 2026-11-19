@@ -4,6 +4,7 @@ import type { FlowControl, Parity, PortConfig } from "./serial";
 import { DEFAULT_GPS_CONFIG, type GpsConfig } from "./gpsSimulator";
 import { DEFAULT_ROUTE_FAULTS, type RouteFaults, type Speed } from "./routePlayer";
 import type { LanguagePreference } from "./i18n";
+import { bitsPerChar, DEFAULT_RX_IDLE_MS, effectiveIdleMs } from "./rxFramer";
 import type { ThemePreference } from "./theme";
 
 export interface QuickCommand {
@@ -23,6 +24,8 @@ export interface Settings {
   stopBits: PortConfig["stopBits"];
   flowControl: FlowControl;
   autoReconnect: boolean;
+  /** Silence (ms) that closes a received line with no line ending; 0 = only line endings. */
+  rxIdleMs: number;
   lineEnding: LineEnding;
   viewMode: "ascii" | "hex";
   timestamps: boolean;
@@ -56,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stopBits: 1,
   flowControl: "none",
   autoReconnect: true,
+  rxIdleMs: DEFAULT_RX_IDLE_MS,
   lineEnding: "crlf",
   viewMode: "ascii",
   timestamps: true,
@@ -134,5 +138,6 @@ export function toPortConfig(s: Settings): PortConfig {
     parity: s.parity,
     stopBits: s.stopBits,
     flowControl: s.flowControl,
+    rxIdleMs: effectiveIdleMs(s.rxIdleMs, s.baudRate, bitsPerChar(s)),
   };
 }

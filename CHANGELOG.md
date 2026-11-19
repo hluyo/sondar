@@ -2,6 +2,18 @@
 
 All notable changes to Sondar are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). While the version starts with 0, Sondar is in beta and anything may change.
 
+## [Unreleased]
+
+### Fixed
+
+- A short answer such as `OK` could be shown split over two lines (`O` and `K`) when it arrived in two pieces. Received bytes are now joined into one line, closed at CR, LF or CR LF, or after a short silence for messages with no line ending.
+- A sent command could be shown after the answer to it. Sent lines are now logged with the time they were sent, before any later answer.
+- Lines ending only in CR overwrote each other in the terminal; they are now separate lines, also in the log, the plot and the map.
+
+### Added
+
+- **More settings → End a received line after … ms without data** (30 ms by default; 0 = only at CR or LF), for exercises that send fixed-length messages with no line ending.
+
 ## [0.1.0] - 2026-10-12
 
 First public version (beta). Windows 10 and 11.

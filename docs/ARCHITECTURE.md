@@ -16,7 +16,7 @@ Sondar is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the seri
 ## Backend (`src-tauri/src`)
 
 - `serial.rs`: all serial access, built on the [`serialport`](https://crates.io/crates/serialport) crate.
-  - `open_port` opens the port and starts a reader thread. The thread reads with a short timeout and sends the bytes to the frontend through a Tauri `Channel`, batching them every ~16 ms (or 16 KB) so fast devices do not flood the UI.
+  - `open_port` opens the port and starts a reader thread. The thread reads with a short timeout and sends the bytes to the frontend through a Tauri `Channel`, batching them every ~16 ms (or 16 KB) so fast devices do not flood the UI. A batch is raw transport: it can end in the middle of a line (the frontend joins them, see `lib/rxFramer.ts`) and carries the wall-clock time its first byte was read. After each silence of `rxIdleMs` following received bytes (30 ms when the setting is 0, to close a line ending received last) the thread flushes and sends `Idle`; the value comes with `open_port` and changes live with `set_rx_idle`. The silence is measured here, where bytes are read: the UI gets them in batches and later when it is busy, so a timer there would see pauses that never happened on the wire. Before each write the thread sends what it has already read, so bytes received before a command never appear after its answer.
   - When the port fails (cable pulled, board reset), the thread sends `Closed { reason }`. A user-initiated close sends `Closed { reason: None }`.
   - Writes are queued to the same thread. On Windows the read and write timeouts are one setting shared by every handle of the port, so the thread raises the timeout for the length of each write (wire time ×2 plus 1 s) and puts the 10 ms read timeout back afterwards; otherwise a 500-byte burst (~45 ms at 115200 baud) would be cut and fail with "semaphore timeout" (os error 121). A cloned handle in `SerialState` is kept for the control lines.
 - `serial.rs` also asserts DTR and RTS on open (RTS is left to the driver with hardware flow control) and, from the reader thread, checks the input lines (CTS, DSR, CD, RI) every 100 ms, sending `Signals` only when they change.
@@ -25,13 +25,16 @@ Sondar is a [Tauri 2](https://tauri.app/) app: a Rust backend that owns the seri
 
 ## Frontend (`src`)
 
-- `lib/stream.ts`: `StreamEvent` (rx, tx, info, error) and a tiny `Emitter`. Every event on the link goes through one stream; the terminal and the plot both subscribe, which is what keeps them in sync.
-- `lib/terminalRenderer.ts`: turns stream events into xterm.js writes: ASCII or HEX view, timestamps, echo, pause queue. Device ANSI sequences pass through.
+- `lib/stream.ts`: `StreamEvent` (rx, tx, info, error) and a tiny `Emitter`. Every event on the link goes through one stream; the terminal and the plot both subscribe, which is what keeps them in sync. Two rules keep the order right:
+  - An `rx` event is one complete received entry, never a piece of one, so nothing can land in the middle of a line.
+  - A `tx` event is emitted when the bytes are handed to the port, before `write_port` returns. The device cannot answer bytes it has not received yet, so its answer always comes after the `tx` line. A failed write adds an error line below.
+- `lib/rxFramer.ts`: `RxFramer` sits between the serial channel and the stream and turns batches of bytes into entries. An entry ends at a line ending (CR, LF, CR LF or LF CR, a pair counted once even across batches), at the backend's `Idle` signal when there is no line ending (setting `rxIdleMs`, 30 ms by default, never shorter than three characters at the current baud rate; 0 = only line endings), or at 4096 bytes. It has no timer of its own. Each entry keeps its bytes (line ending included), its text (without it), the time of its first byte and why it ended. No byte is dropped or reordered: joining the entries gives the stream back (`rxFramer.test.ts` checks this with random chunking).
+- `lib/terminalRenderer.ts`: turns stream events into xterm.js writes, one line per event: ASCII or HEX view (16 bytes per row), timestamps, echo, pause queue. Device ANSI sequences pass through.
 - `lib/lineParser.ts`: extracts numeric channels from a text line (`name=value`, `name:value` or plain numbers).
 - `lib/plotStore.ts`: column store for the plot (shared time axis + one array per channel), capped in size, plus per-window statistics.
 - `lib/encoding.ts`: line endings and escape handling (`\r`, `\n`, `\xHH`…) for sent commands.
 - `lib/serial.ts`: typed wrappers around the Tauri commands.
-- `lib/sessionLog.ts`: subscribes to the stream, splits received bytes into timestamped lines (ANSI codes removed) and sends them to the backend in batches.
+- `lib/sessionLog.ts`: subscribes to the stream, writes one timestamped line per event (ANSI codes removed) and sends them to the backend in batches.
 - `lib/files.ts`: typed wrappers for the file commands.
 - `lib/settings.ts`: settings persisted in `localStorage`.
 - `lib/i18n.ts` and `lib/i18n.es.ts`: translations. `t("English text", vars)` looks the English string up in the Spanish dictionary, so a missing entry simply shows English; `{name}` placeholders are filled from `vars`. The language follows the system (`auto`) or the user's choice; App sets it on every render before its children render, and also uses it for the window title.
